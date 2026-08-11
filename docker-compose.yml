@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   bankapp-inspector:
     build: .
@@ -11,7 +9,7 @@ services:
     networks:
       - infrastructure_default
     ports:
-      - "8085:80"
+      - "8087:80"
 
 networks:
   infrastructure_default:
