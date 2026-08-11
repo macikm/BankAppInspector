@@ -19,4 +19,4 @@
 
 ## 💻 Spuštění
 
-Otevřete soubor `index.html` nebo `BankAppInspector.html` v jakémkoliv moderním prohlížeči.
+Otevřete soubor `BankAppInspector.html` v jakémkoliv moderním prohlížeči.
