@@ -3,7 +3,16 @@ version: '3.8'
 services:
   bankapp-inspector:
     build: .
+    image: bankapp-inspector:latest
     container_name: bankapp-inspector
-    restart: always
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Prague
+    networks:
+      - infrastructure_default
     ports:
       - "8085:80"
+
+networks:
+  infrastructure_default:
+    external: true
