@@ -56,22 +56,7 @@ Všechny níže uvedené API požadavky (mimo přihlášení) posílají tyto st
 
 ## 💸 5. Dávkové Příkazy (Payments API)
 
-### **`POST /api/v1/Payments/list`**
-* **Metoda:** `POST`
-* **Účel:** Načtení seznamu všech platbových příkazů.
-* **Body:**
-  ```json
-  {
-    "page": 1,
-    "pageSize": 100,
-    "sort": [],
-    "filter": null
-  }
-  ```
-
-### **`POST /api/v1/Payments/list/open`** *(Fallback)*
-* **Metoda:** `POST`
-* **Účel:** Načtení otevřených platbových příkazů v případě selhání primárního endpointu `/Payments/list`.
+> ⚠️ **Poznámka:** Volání endpointů `Payments/list` a `Payments/list/open` je v aplikaci **vypnuté**, protože tyto endpointy vyžadují speciální oprávnění `RestAPI-PaymentsController-GetAllPayments` a pro nevlastnické / běžné účty vrací `HTTP 403 Forbidden`.
 
 ---
 
