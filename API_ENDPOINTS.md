@@ -58,7 +58,7 @@ Všechny níže uvedené API požadavky (mimo přihlášení) posílají tyto st
 
 ### **`POST /api/v1/Payments/list`**
 * **Metoda:** `POST`
-* **Účel:** Načtení seznamu platbových příkazů.
+* **Účel:** Načtení seznamu všech platbových příkazů.
 * **Body:**
   ```json
   {
@@ -68,6 +68,10 @@ Všechny níže uvedené API požadavky (mimo přihlášení) posílají tyto st
     "filter": null
   }
   ```
+
+### **`POST /api/v1/Payments/list/open`** *(Fallback)*
+* **Metoda:** `POST`
+* **Účel:** Načtení otevřených platbových příkazů v případě selhání primárního endpointu `/Payments/list`.
 
 ---
 

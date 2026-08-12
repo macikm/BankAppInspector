@@ -1580,10 +1580,16 @@
       const req = { page: paginationState.pay.page, pageSize: paginationState.pay.pageSize, sort: [], filter: null };
       try {
         const payData = await fetchApi('/api/v1/Payments/list', 'POST', req);
-        rawPayments = payData.items || payData.data || [];
+        rawPayments = payData.items || payData.data || (Array.isArray(payData) ? payData : []);
       } catch (e) {
-        logConsole("Chyba při načítání Příkazů (Payments)", e.message);
-        rawPayments = [];
+        logConsole("Payments/list selhalo, zkouším Payments/list/open...", e.message);
+        try {
+          const openPayData = await fetchApi('/api/v1/Payments/list/open', 'POST', req);
+          rawPayments = openPayData.items || openPayData.data || (Array.isArray(openPayData) ? openPayData : []);
+        } catch (e2) {
+          logConsole("Chyba při načítání Otevřených Příkazů (Payments)", e2.message);
+          rawPayments = [];
+        }
       }
       renderPaymentsGrid(rawPayments);
     }
