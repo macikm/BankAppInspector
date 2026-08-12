@@ -871,10 +871,8 @@
         </div>
       </div>
 
-      <!-- Modal Body (Pretty Formatted JSON & Structured Table) -->
-      <div class="flex-1 overflow-y-auto space-y-4 pr-1">
-        <div id="detailModalSummary" class="hidden glass-panel p-3 rounded-lg border border-gray-800 bg-gray-900/50">
-        </div>
+      <!-- Modal Body (Pretty Formatted JSON) -->
+      <div class="flex-1 overflow-y-auto pr-1">
         <div id="detailModalContent"
           class="bg-gray-950 p-4 rounded-xl text-xs font-mono overflow-x-auto border border-gray-800/80 leading-relaxed text-gray-200">
           Načítání...
@@ -1385,25 +1383,6 @@
 
       const contentEl = document.getElementById('detailModalContent');
       contentEl.innerHTML = formatJsonToSyntaxHtml(jsonContent);
-
-      // Summary Card if object
-      const summaryEl = document.getElementById('detailModalSummary');
-      if (typeof jsonContent === 'object' && jsonContent !== null && !Array.isArray(jsonContent)) {
-        summaryEl.innerHTML = `
-          <div class="flex flex-wrap items-center justify-between gap-4 p-3 bg-gray-900/90 rounded-xl border border-gray-800 text-xs">
-            <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-              ${jsonContent.code ? `<div class="max-w-[200px] sm:max-w-xs"><span class="text-gray-400 block text-[11px]">Kód Zprávy:</span><strong class="text-blue-400 font-mono block truncate" title="${jsonContent.code}">${jsonContent.code}</strong></div>` : ''}
-              ${jsonContent.companyName ? `<div><span class="text-gray-400 block text-[11px]">Firma:</span><strong class="text-white font-medium">${jsonContent.companyName}</strong></div>` : ''}
-              ${jsonContent.bankAccount ? `<div><span class="text-gray-400 block text-[11px]">Účet:</span><strong class="font-mono text-amber-300">${jsonContent.bankAccount}</strong></div>` : ''}
-              ${jsonContent.date ? `<div><span class="text-gray-400 block text-[11px]">Datum:</span><span class="text-gray-300 font-mono">${new Date(jsonContent.date).toLocaleString('cs-CZ')}</span></div>` : ''}
-              ${jsonContent.stateLocalized || jsonContent.state !== undefined ? `<div><span class="text-gray-400 block text-[11px] mb-0.5">Stav:</span>${renderStateBadge(jsonContent.state, jsonContent.stateLocalized)}</div>` : ''}
-            </div>
-          </div>
-        `;
-        summaryEl.classList.remove('hidden');
-      } else {
-        summaryEl.classList.add('hidden');
-      }
 
       document.getElementById('detailModal').classList.remove('hidden');
     }
