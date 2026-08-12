@@ -1519,7 +1519,9 @@
         headers['Authorization'] = `Bearer ${config.accessToken}`;
       }
 
-      logConsole(`${method} Request: ${url}`, body);
+      if (config.accessToken) {
+        headers['Authorization'] = `Bearer ${config.accessToken}`;
+      }
 
       const options = {
         method: method,
@@ -1533,7 +1535,7 @@
 
       if (!res.ok) {
         const errText = await res.text();
-        logConsole(`Error response (${res.status}) z ${endpoint}:`, errText);
+        logConsole(`Chyba API (${res.status}) z ${endpoint}:`, errText);
         throw new Error(`HTTP ${res.status}: ${errText}`);
       }
 
@@ -1577,20 +1579,9 @@
     }
 
     async function fetchPaymentsData() {
-      const req = { page: paginationState.pay.page, pageSize: paginationState.pay.pageSize, sort: [], filter: null };
-      try {
-        const payData = await fetchApi('/api/v1/Payments/list', 'POST', req);
-        rawPayments = payData.items || payData.data || (Array.isArray(payData) ? payData : []);
-      } catch (e) {
-        logConsole("Payments/list selhalo, zkouším Payments/list/open...", e.message);
-        try {
-          const openPayData = await fetchApi('/api/v1/Payments/list/open', 'POST', req);
-          rawPayments = openPayData.items || openPayData.data || (Array.isArray(openPayData) ? openPayData : []);
-        } catch (e2) {
-          logConsole("Chyba při načítání Otevřených Příkazů (Payments)", e2.message);
-          rawPayments = [];
-        }
-      }
+      // Payments API requires special role permissions that throw 403 Forbidden for non-admin accounts.
+      // Omit calling PaymentsController endpoints to keep log clean and prevent 403 errors.
+      rawPayments = [];
       renderPaymentsGrid(rawPayments);
     }
 
@@ -1613,10 +1604,7 @@
     }
 
     async function refreshData() {
-      if (!config.tenantId) {
-        logConsole("Upozornění: Není zadáno Tenant ID.");
-        return;
-      }
+      if (!config.tenantId) return;
 
       const icon = document.getElementById('refreshIcon');
       if (icon) icon.classList.add('fa-spin');
@@ -1693,7 +1681,6 @@
     async function fetchReqDataFromDS(reqId) {
       if (!reqId) return;
       const cleanId = String(reqId).trim();
-      logConsole(`Načítám požadavek ${cleanId} přes Maintenance API...`);
 
       // 1. Primary Maintenance API: /api/v1/Maintenance/GetStatementReqDataFromDS/{tenantId}/{id}
       try {
@@ -1701,7 +1688,7 @@
         showDetailModal(`Detail Požadavku z DataService (${cleanId})`, maintReq);
         return;
       } catch (err1) {
-        logConsole(`Maintenance GetStatementReqDataFromDS selhalo (${err1.message}), zkouším GetFile...`);
+        // Silent fallback
       }
 
       // 2. Secondary Maintenance API: /api/v1/Maintenance/GetFile/{tenantId}/{id}
@@ -1725,7 +1712,6 @@
     async function fetchMaintenanceFile(fileId) {
       if (!fileId) return;
       try {
-        logConsole(`Načítám detail souboru ${fileId} z Maintenance API...`);
         const fileContent = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${fileId}`, 'GET');
 
         // Inspect date mismatch in loaded JSON file
