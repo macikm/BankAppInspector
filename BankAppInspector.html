@@ -787,8 +787,8 @@
 
   <!-- Login & Configuration Modal -->
   <div id="configModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="glass-panel rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-gray-700 space-y-5">
-      <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+    <div class="glass-panel rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-gray-700 space-y-4">
+      <div class="flex items-center justify-between pb-1">
         <h3 class="text-lg font-bold text-white flex items-center gap-2">
           <i class="fa-solid fa-key text-blue-400"></i> Autentikace & Nastavení
         </h3>
@@ -824,9 +824,9 @@
         </div>
 
         <div class="relative flex items-center py-1">
-          <div class="flex-grow border-t border-gray-800"></div>
+          <div class="flex-grow border-t border-gray-800/40"></div>
           <span class="flex-shrink mx-2 text-xs text-gray-500 uppercase">nebo Přímý Bearer Token</span>
-          <div class="flex-grow border-t border-gray-800"></div>
+          <div class="flex-grow border-t border-gray-800/40"></div>
         </div>
 
         <div>
@@ -854,10 +854,10 @@
   <div id="detailModal"
     class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
     <div
-      class="glass-panel rounded-2xl p-6 w-full max-w-4xl shadow-2xl border border-gray-700 flex flex-col max-h-[90vh] space-y-4">
+      class="glass-panel rounded-2xl p-6 w-full max-w-4xl shadow-2xl border border-gray-700 flex flex-col max-h-[90vh] space-y-3">
 
       <!-- Modal Header -->
-      <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+      <div class="flex items-center justify-between pb-1">
         <h3 class="text-lg font-bold text-white flex items-center gap-2" id="detailModalTitle">
           <i class="fa-solid fa-code text-blue-400"></i> Detail Payload / Zprávy
         </h3>
@@ -880,7 +880,7 @@
       </div>
 
       <!-- Modal Footer -->
-      <div class="flex justify-between items-center border-t border-gray-800 pt-3 text-xs text-gray-400">
+      <div class="flex justify-between items-center text-xs text-gray-400 pt-1">
         <span id="copyNotice" class="text-green-400 hidden"><i class="fa-solid fa-check"></i> Zkopírováno do
           schránky!</span>
         <button onclick="closeDetailModal()"
