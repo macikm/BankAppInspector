@@ -32,64 +32,25 @@ Všechny níže uvedené API požadavky (mimo přihlášení) posílají tyto st
 
 ## 📦 2. ERP Požadavky & Zprávy (ERP Messages)
 
-### **`POST /api/v1/Messages/ERPMessages/list`**
-* **Metoda:** `POST`
-* **Účel:** Načtení stránkovaného přehledu zpráv odeslaných z ERP systému.
-* **Body:**
-  ```json
-  {
-    "page": 1,
-    "pageSize": 100,
-    "sort": [],
-    "filter": null
-  }
-  ```
-
-### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/ErpMessage`** *(Fallback)*
+### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/ErpMessage?page={page}&pageSize={pageSize}`**
 * **Metoda:** `GET`
-* **Účel:** Zpětné načtení ERP zpráv přes správcovské Maintenance API v případě selhání primárního endpointu.
+* **Účel:** Načtení přehledu ERP zpráv přes Maintenance API (obchází HTTP 403 u nevlastnických účtů).
 
 ---
 
 ## 📄 3. Žádosti o Výpisy (Statement Messages)
 
-### **`POST /api/v1/Messages/StatementMessages/list`**
-* **Metoda:** `POST`
-* **Účel:** Načtení seznamu žádostí o bankovní výpisy.
-* **Body:**
-  ```json
-  {
-    "page": 1,
-    "pageSize": 100,
-    "sort": [],
-    "filter": null
-  }
-  ```
-
-### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/StatementMessage`** *(Fallback)*
+### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/StatementMessage?page={page}&pageSize={pageSize}`**
 * **Metoda:** `GET`
-* **Účel:** Zpětné načtení výpisů přes Maintenance API.
+* **Účel:** Načtení výpisů výhradně přes Maintenance API.
 
 ---
 
 ## 🏦 4. Zprávy & Komunikace s Bankou (Bank Messages)
 
-### **`POST /api/v1/Messages/BankMessages/list`**
-* **Metoda:** `POST`
-* **Účel:** Načtení seznamu odpovědí a zpráv přijatých z banky.
-* **Body:**
-  ```json
-  {
-    "page": 1,
-    "pageSize": 100,
-    "sort": [],
-    "filter": null
-  }
-  ```
-
-### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/BankMessage`** *(Fallback)*
+### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/BankMessage?page={page}&pageSize={pageSize}`**
 * **Metoda:** `GET`
-* **Účel:** Zpětné načtení bankovních zpráv přes Maintenance API.
+* **Účel:** Načtení zpráv a odpovědí banky výhradně přes Maintenance API.
 
 ---
 
@@ -110,17 +71,13 @@ Všechny níže uvedené API požadavky (mimo přihlášení) posílají tyto st
 
 ---
 
-## 📑 6. Detail Požadavku & Souborů (DataService & Maintenance)
+## 📑 6. Detail Požadavku & Souborů (Maintenance & DataService)
 
-### **`GET /api/v1/Utility/GetReqDataFromDS/{id}`**
+### **`GET /api/v1/Maintenance/GetStatementReqDataFromDS/{tenantId}/{id}`**
 * **Metoda:** `GET`
-* **Účel:** Získání těla požadavku z DataService (tlačítko **Požadavek**).
+* **Účel:** Získání těla požadavku z DataService přes Maintenance API (tlačítko **Požadavek**).
 
-### **`GET /api/v1/Maintenance/GetStatementReqDataFromDS/{tenantId}/{id}`** *(Fallback 1)*
-* **Metoda:** `GET`
-* **Účel:** Načtení požadavku z DataService přes Maintenance API v případě chybějících rolí u Utility API (obchází HTTP 403 Forbidden).
-
-### **`GET /api/v1/Maintenance/GetFile/{tenantId}/{fileId}`** *(Fallback 2, Detaily & Kontrola rozsahů datumu)*
+### **`GET /api/v1/Maintenance/GetFile/{tenantId}/{fileId}`**
 * **Metoda:** `GET`
 * **Účel:** Načtení surového JSON souboru odpovědi/výpisu (tlačítka **Odpověď**, **Výpis**) a skenování rozsahů `dateFrom <> dateTo` pro vyhodnocení jednodenního (OK 🟢) vs. vícedenního (Upozornění 🔴) výpisu.
 

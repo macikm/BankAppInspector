@@ -1541,38 +1541,36 @@
     }
 
     async function fetchStatementsData() {
-      const req = { page: paginationState.stmt.page, pageSize: paginationState.stmt.pageSize, sort: [], filter: null };
+      const page = paginationState.stmt.page;
+      const pageSize = paginationState.stmt.pageSize;
+      let queryParams = `?page=${page}&pageSize=${pageSize}`;
+      if (dateFilter.from) queryParams += `&from=${encodeURIComponent(dateFilter.from)}`;
+      if (dateFilter.to) queryParams += `&to=${encodeURIComponent(dateFilter.to)}`;
+
       try {
-        const stmtData = await fetchApi('/api/v1/Messages/StatementMessages/list', 'POST', req);
-        rawStatements = stmtData.items || stmtData.data || [];
-      } catch (e) {
-        logConsole("Standardní Výpisy selhaly, zkouším Maintenance API...", e.message);
-        try {
-          const maintStmt = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/StatementMessage`, 'GET');
-          rawStatements = maintStmt.items || maintStmt.data || [];
-        } catch (mErr) {
-          logConsole("Maintenance Výpisy selhaly", mErr.message);
-          rawStatements = [];
-        }
+        const maintStmt = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/StatementMessage${queryParams}`, 'GET');
+        rawStatements = maintStmt.items || maintStmt.data || (Array.isArray(maintStmt) ? maintStmt : []);
+      } catch (mErr) {
+        logConsole("Maintenance Výpisy selhaly", mErr.message);
+        rawStatements = [];
       }
       applyFiltersStatements();
       scanStatementDateMismatches(rawStatements);
     }
 
     async function fetchBankData() {
-      const req = { page: paginationState.bank.page, pageSize: paginationState.bank.pageSize, sort: [], filter: null };
+      const page = paginationState.bank.page;
+      const pageSize = paginationState.bank.pageSize;
+      let queryParams = `?page=${page}&pageSize=${pageSize}`;
+      if (dateFilter.from) queryParams += `&from=${encodeURIComponent(dateFilter.from)}`;
+      if (dateFilter.to) queryParams += `&to=${encodeURIComponent(dateFilter.to)}`;
+
       try {
-        const bankMsgData = await fetchApi('/api/v1/Messages/BankMessages/list', 'POST', req);
-        rawBankMessages = bankMsgData.items || bankMsgData.data || [];
-      } catch (e) {
-        logConsole("Standardní Bank Zprávy selhaly, zkouším Maintenance API...", e.message);
-        try {
-          const maintBank = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/BankMessage`, 'GET');
-          rawBankMessages = maintBank.items || maintBank.data || [];
-        } catch (mErr) {
-          logConsole("Maintenance Bank Zprávy selhaly", mErr.message);
-          rawBankMessages = [];
-        }
+        const maintBank = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/BankMessage${queryParams}`, 'GET');
+        rawBankMessages = maintBank.items || maintBank.data || (Array.isArray(maintBank) ? maintBank : []);
+      } catch (mErr) {
+        logConsole("Maintenance Bank Zprávy selhaly", mErr.message);
+        rawBankMessages = [];
       }
       applyFiltersBankMsgs();
       scanStatementDateMismatches(rawBankMessages);
@@ -1591,19 +1589,18 @@
     }
 
     async function fetchErpData() {
-      const req = { page: paginationState.erp.page, pageSize: paginationState.erp.pageSize, sort: [], filter: null };
+      const page = paginationState.erp.page;
+      const pageSize = paginationState.erp.pageSize;
+      let queryParams = `?page=${page}&pageSize=${pageSize}`;
+      if (dateFilter.from) queryParams += `&from=${encodeURIComponent(dateFilter.from)}`;
+      if (dateFilter.to) queryParams += `&to=${encodeURIComponent(dateFilter.to)}`;
+
       try {
-        const erpData = await fetchApi('/api/v1/Messages/ERPMessages/list', 'POST', req);
-        rawErpMessages = erpData.items || erpData.data || [];
-      } catch (e) {
-        logConsole("Standardní ERP Zprávy selhaly, zkouším Maintenance API...", e.message);
-        try {
-          const maintErp = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/ErpMessage`, 'GET');
-          rawErpMessages = maintErp.items || maintErp.data || [];
-        } catch (mErr) {
-          logConsole("Maintenance ERP Zprávy selhaly", mErr.message);
-          rawErpMessages = [];
-        }
+        const maintErp = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/ErpMessage${queryParams}`, 'GET');
+        rawErpMessages = maintErp.items || maintErp.data || (Array.isArray(maintErp) ? maintErp : []);
+      } catch (mErr) {
+        logConsole("Maintenance ERP Zprávy selhaly", mErr.message);
+        rawErpMessages = [];
       }
       applyFiltersErp();
       scanStatementDateMismatches(rawErpMessages);
@@ -1690,34 +1687,32 @@
     async function fetchReqDataFromDS(reqId) {
       if (!reqId) return;
       const cleanId = String(reqId).trim();
-      logConsole(`Načítám požadavek ${cleanId}...`);
+      logConsole(`Načítám požadavek ${cleanId} přes Maintenance API...`);
 
-      // 1. Try Utility API: /api/v1/Utility/GetReqDataFromDS/{id}
-      try {
-        const reqData = await fetchApi(`/api/v1/Utility/GetReqDataFromDS/${cleanId}`, 'GET');
-        showDetailModal(`Detail Požadavku z DataService (${cleanId})`, reqData);
-        return;
-      } catch (err1) {
-        logConsole(`Utility GetReqDataFromDS selhalo (${err1.message}), zkouším Maintenance API...`);
-      }
-
-      // 2. Fallback to Maintenance API: /api/v1/Maintenance/GetStatementReqDataFromDS/{tenantId}/{id}
+      // 1. Primary Maintenance API: /api/v1/Maintenance/GetStatementReqDataFromDS/{tenantId}/{id}
       try {
         const maintReq = await fetchApi(`/api/v1/Maintenance/GetStatementReqDataFromDS/${config.tenantId}/${cleanId}`, 'GET');
         showDetailModal(`Detail Požadavku z DataService (${cleanId})`, maintReq);
         return;
-      } catch (err2) {
-        logConsole(`Maintenance GetStatementReqDataFromDS selhalo (${err2.message}), zkouším GetFile...`);
+      } catch (err1) {
+        logConsole(`Maintenance GetStatementReqDataFromDS selhalo (${err1.message}), zkouším GetFile...`);
       }
 
-      // 3. Fallback to Maintenance API: /api/v1/Maintenance/GetFile/{tenantId}/{id}
+      // 2. Secondary Maintenance API: /api/v1/Maintenance/GetFile/{tenantId}/{id}
       try {
         const maintFile = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${cleanId}`, 'GET');
         showDetailModal(`Detail Souboru Požadavku (${cleanId})`, maintFile);
         return;
-      } catch (err3) {
-        logConsole(`Všechny pokusy o načtení požadavku ${cleanId} selhaly.`, err3.message);
-        showDetailModal(`Chyba Požadavku (${cleanId})`, err3.message);
+      } catch (err2) {
+        // 3. Fallback to Utility API: /api/v1/Utility/GetReqDataFromDS/{id}
+        try {
+          const reqData = await fetchApi(`/api/v1/Utility/GetReqDataFromDS/${cleanId}`, 'GET');
+          showDetailModal(`Detail Požadavku z DataService (${cleanId})`, reqData);
+          return;
+        } catch (err3) {
+          logConsole(`Všechny pokusy o načtení požadavku ${cleanId} selhaly.`, err3.message);
+          showDetailModal(`Chyba Požadavku (${cleanId})`, err3.message);
+        }
       }
     }
 
