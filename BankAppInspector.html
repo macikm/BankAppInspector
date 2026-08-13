@@ -1258,8 +1258,88 @@
       }
     }
 
+    // OAuth Token Helper Functions
+    function isTokenExpired(token) {
+      if (!token) return true;
+      try {
+        const base64Url = token.split('.')[1];
+        if (!base64Url) return false;
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+        const payload = JSON.parse(jsonPayload);
+        if (payload && payload.exp) {
+          return (payload.exp * 1000) < (Date.now() + 30000); // 30 second buffer
+        }
+      } catch (e) {
+        // Fallback if not standard JWT format
+      }
+      return false;
+    }
+
+    async function obtainOAuthToken(silent = false) {
+      if (!config.username || !config.password) {
+        throw new Error("Chybí přihlašovací jméno nebo heslo.");
+      }
+
+      if (!silent) {
+        logConsole("Získávám OAuth token z IdentityServeru...");
+      }
+
+      const idpUrl = config.baseUrl.includes('localhost')
+        ? 'https://dev.avaplace.com/api/asol/idp/connect/token'
+        : `${config.baseUrl}/api/asol/idp/connect/token`;
+
+      const bodyParams = new URLSearchParams();
+      bodyParams.append('grant_type', 'password');
+      bodyParams.append('username', config.username);
+      bodyParams.append('password', config.password);
+      bodyParams.append('client_id', config.clientId || 'plaza-pass');
+      if (config.clientSecret) {
+        bodyParams.append('client_secret', config.clientSecret);
+      }
+
+      const headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      };
+      if (config.tenantId) {
+        headers['X-Tenant'] = config.tenantId;
+      }
+
+      const tokenRes = await fetch(idpUrl, {
+        method: 'POST',
+        headers: headers,
+        body: bodyParams
+      });
+
+      if (!tokenRes.ok) {
+        const errText = await tokenRes.text();
+        throw new Error(`IDP Auth Failed (${tokenRes.status}): ${errText}`);
+      }
+
+      const tokenData = await tokenRes.json();
+      config.accessToken = tokenData.access_token;
+      localStorage.setItem('bankapp_access_token', config.accessToken);
+      updateStatusUI(true, "Přihlášeno přes OAuth");
+      return config.accessToken;
+    }
+
+    async function ensureValidToken() {
+      if (config.accessToken && !isTokenExpired(config.accessToken)) {
+        return config.accessToken;
+      }
+
+      if (config.username && config.password) {
+        return await obtainOAuthToken(true);
+      }
+
+      if (!config.accessToken) {
+        throw new Error("Není k dispozici žádný OAuth Token ani přihlašovací údaje.");
+      }
+      return config.accessToken;
+    }
+
     // Initialize Header tenant input & saved theme
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       const savedTheme = localStorage.getItem('bankapp_theme') || 'dark';
       if (savedTheme === 'light') {
         document.documentElement.classList.remove('dark');
@@ -1274,17 +1354,33 @@
       if (topTenantInput) {
         topTenantInput.value = config.tenantId;
       }
-      if (config.accessToken) {
-        updateStatusUI(true, "Připojeno (Uložený Token)");
+
+      // Ensure valid OAuth token is obtained BEFORE triggering API data calls!
+      try {
+        await ensureValidToken();
+        updateStatusUI(true, "Připojeno (OAuth Token)");
+      } catch (e) {
+        updateStatusUI(false, "Vyžaduje přihlášení");
       }
-      refreshData();
+
+      await refreshData();
     });
 
-    function onTenantTopChanged(newVal) {
+    async function onTenantTopChanged(newVal) {
       config.tenantId = newVal.trim();
       localStorage.setItem('bankapp_tenant_id', config.tenantId);
       logConsole(`Tenant ID upraven na: ${config.tenantId}`);
-      refreshData();
+
+      // Reset cached token and acquire fresh OAuth token bound to new Tenant ID BEFORE fetching data
+      config.accessToken = null;
+      localStorage.removeItem('bankapp_access_token');
+      try {
+        await ensureValidToken();
+      } catch (e) {
+        logConsole("Upozornění: Získání tokenu pro nový tenant selhalo", e.message);
+      }
+
+      await refreshData();
     }
 
     function logConsole(msg, obj = null) {
@@ -1340,13 +1436,15 @@
     });
 
     function formatJsonToSyntaxHtml(jsonObj) {
+      if (!jsonObj) return '<span class="text-gray-500 italic">Žádná data</span>';
+
       let rawStr = '';
       if (typeof jsonObj === 'string') {
+        rawStr = jsonObj;
         try {
-          jsonObj = JSON.parse(jsonObj);
-          rawStr = JSON.stringify(jsonObj, null, 2);
+          const parsed = JSON.parse(jsonObj);
+          rawStr = JSON.stringify(parsed, null, 2);
         } catch (e) {
-          currentModalRawText = jsonObj;
           return `<pre class="text-green-400 font-mono text-xs whitespace-pre-wrap">${escapeHtml(jsonObj)}</pre>`;
         }
       } else {
@@ -1456,46 +1554,10 @@
       }
 
       // Obtain OAuth Token from IDP
-      logConsole("Získávám OAuth token z IdentityServeru...");
       try {
-        const idpUrl = config.baseUrl.includes('localhost')
-          ? 'https://dev.avaplace.com/api/asol/idp/connect/token'
-          : `${config.baseUrl}/api/asol/idp/connect/token`;
-
-        const bodyParams = new URLSearchParams();
-        bodyParams.append('grant_type', 'password');
-        bodyParams.append('username', config.username);
-        bodyParams.append('password', config.password);
-        bodyParams.append('client_id', config.clientId);
-        if (config.clientSecret) {
-          bodyParams.append('client_secret', config.clientSecret);
-        }
-
-        const headers = {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        };
-        if (config.tenantId) {
-          headers['X-Tenant'] = config.tenantId;
-        }
-
-        const tokenRes = await fetch(idpUrl, {
-          method: 'POST',
-          headers: headers,
-          body: bodyParams
-        });
-
-        if (!tokenRes.ok) {
-          const errText = await tokenRes.text();
-          throw new Error(`IDP Auth Failed (${tokenRes.status}): ${errText}`);
-        }
-
-        const tokenData = await tokenRes.json();
-        config.accessToken = tokenData.access_token;
-        localStorage.setItem('bankapp_access_token', config.accessToken);
-        updateStatusUI(true, "Přihlášeno přes OAuth");
+        await obtainOAuthToken(false);
         toggleConfigModal();
         await refreshData();
-
       } catch (err) {
         logConsole("Chyba při autentikaci", err.message);
         const modalErr = document.getElementById('modalError');
@@ -1505,7 +1567,16 @@
       }
     }
 
-    async function fetchApi(endpoint, method = 'POST', body = null, silent = false) {
+    async function fetchApi(endpoint, method = 'POST', body = null, silent = false, isRetry = false) {
+      // 1. Ensure valid OAuth token is present before executing request
+      if (!isRetry) {
+        try {
+          await ensureValidToken();
+        } catch (e) {
+          // Proceed with request if no credentials available
+        }
+      }
+
       const apiRoot = config.baseUrl.includes('localhost')
         ? config.baseUrl
         : `${config.baseUrl}/api/asoleu/bankapp`;
@@ -1530,6 +1601,18 @@
       }
 
       const res = await fetch(url, options);
+
+      // Automatic token refresh retry on 401 Unauthorized or 403 Forbidden
+      if ((res.status === 401 || res.status === 403) && !isRetry && config.username && config.password) {
+        try {
+          config.accessToken = null;
+          localStorage.removeItem('bankapp_access_token');
+          await obtainOAuthToken(true);
+          return await fetchApi(endpoint, method, body, silent, true);
+        } catch (refreshErr) {
+          // If auto re-auth fails, fall through to error handling
+        }
+      }
 
       if (!res.ok) {
         const errText = await res.text();
