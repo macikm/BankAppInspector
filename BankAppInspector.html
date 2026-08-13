@@ -1154,8 +1154,10 @@
       return `<span id="dateWarn-${key}" class="w-5 h-5 flex-shrink-0 flex items-center justify-center inline-block">${content}</span>`;
     }
 
+    let hasGetFileAccess = true;
+
     async function scanStatementDateMismatches(items) {
-      if (!items || !Array.isArray(items) || !config.tenantId) return;
+      if (!items || !Array.isArray(items) || !config.tenantId || !hasGetFileAccess) return;
 
       const itemsToScan = items.filter(item => {
         const fileId = item.statementJsonFileReferenceId || item.responseJsonId;
@@ -1166,12 +1168,15 @@
       if (itemsToScan.length === 0) return;
 
       for (let i = 0; i < itemsToScan.length; i += 6) {
+        if (!hasGetFileAccess) break;
         const batch = itemsToScan.slice(i, i + 6);
         await Promise.all(batch.map(async item => {
+          if (!hasGetFileAccess) return;
           const fileId = item.statementJsonFileReferenceId || item.responseJsonId;
           const key = fileId || item.code || item.requestReferenceId;
           try {
-            const fileContent = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${fileId}`, 'GET');
+            // Pass silent = true so background scanning does not flood the raw console
+            const fileContent = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${fileId}`, 'GET', null, true);
             let isMismatch = false;
             let dFrom = null;
             let dTo = null;
@@ -1225,6 +1230,9 @@
               }
             }
           } catch (e) {
+            if (e.message && e.message.includes('403')) {
+              hasGetFileAccess = false; // Disable background scanning if account lacks GetFile permission
+            }
             statementMismatchCache[key] = { isMismatch: false, dateFrom: null, dateTo: null };
             const iconEl = document.getElementById(`dateWarn-${key}`);
             if (iconEl) {
@@ -1503,7 +1511,7 @@
       }
     }
 
-    async function fetchApi(endpoint, method = 'POST', body = null) {
+    async function fetchApi(endpoint, method = 'POST', body = null, silent = false) {
       const apiRoot = config.baseUrl.includes('localhost')
         ? config.baseUrl
         : `${config.baseUrl}/api/asoleu/bankapp`;
@@ -1514,10 +1522,6 @@
         'Content-Type': 'application/json',
         'X-Tenant': config.tenantId
       };
-
-      if (config.accessToken) {
-        headers['Authorization'] = `Bearer ${config.accessToken}`;
-      }
 
       if (config.accessToken) {
         headers['Authorization'] = `Bearer ${config.accessToken}`;
@@ -1535,7 +1539,9 @@
 
       if (!res.ok) {
         const errText = await res.text();
-        logConsole(`Chyba API (${res.status}) z ${endpoint}:`, errText);
+        if (!silent) {
+          logConsole(`Chyba API (${res.status}) z ${endpoint}:`, errText);
+        }
         throw new Error(`HTTP ${res.status}: ${errText}`);
       }
 
