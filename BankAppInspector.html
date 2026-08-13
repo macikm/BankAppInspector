@@ -1154,10 +1154,8 @@
       return `<span id="dateWarn-${key}" class="w-5 h-5 flex-shrink-0 flex items-center justify-center inline-block">${content}</span>`;
     }
 
-    let hasGetFileAccess = true;
-
     async function scanStatementDateMismatches(items) {
-      if (!items || !Array.isArray(items) || !config.tenantId || !hasGetFileAccess) return;
+      if (!items || !Array.isArray(items) || !config.tenantId) return;
 
       const itemsToScan = items.filter(item => {
         const fileId = item.statementJsonFileReferenceId || item.responseJsonId;
@@ -1168,10 +1166,8 @@
       if (itemsToScan.length === 0) return;
 
       for (let i = 0; i < itemsToScan.length; i += 6) {
-        if (!hasGetFileAccess) break;
         const batch = itemsToScan.slice(i, i + 6);
         await Promise.all(batch.map(async item => {
-          if (!hasGetFileAccess) return;
           const fileId = item.statementJsonFileReferenceId || item.responseJsonId;
           const key = fileId || item.code || item.requestReferenceId;
           try {
@@ -1214,13 +1210,13 @@
               }
             }
 
-            const info = { isMismatch, dateFrom: dFrom, dateTo: dTo };
+            const info = { isMismatch, dateFrom: dFrom || item.date, dateTo: dTo || item.date };
             statementMismatchCache[key] = info;
 
             const iconEl = document.getElementById(`dateWarn-${key}`) || document.getElementById(`dateWarn-${item.code}`) || document.getElementById(`dateWarn-${item.requestReferenceId}`);
             if (iconEl) {
-              const fromStr = dFrom ? formatDateCz(dFrom) : '';
-              const toStr = dTo ? formatDateCz(dTo) : '';
+              const fromStr = dFrom ? formatDateCz(dFrom) : formatDateCz(item.date);
+              const toStr = dTo ? formatDateCz(dTo) : formatDateCz(item.date);
               if (isMismatch) {
                 const rangeText = (fromStr && toStr && fromStr !== toStr) ? ` (${fromStr} – ${toStr})` : (fromStr ? ` (${fromStr})` : '');
                 iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="Upozornění: Vícedenní rozsah výpisu dateFrom <> dateTo${rangeText}"></i>`;
@@ -1230,13 +1226,11 @@
               }
             }
           } catch (e) {
-            if (e.message && e.message.includes('403')) {
-              hasGetFileAccess = false; // Disable background scanning if account lacks GetFile permission
-            }
-            statementMismatchCache[key] = { isMismatch: false, dateFrom: null, dateTo: null };
-            const iconEl = document.getElementById(`dateWarn-${key}`);
+            statementMismatchCache[key] = { isMismatch: false, dateFrom: item.date, dateTo: item.date };
+            const iconEl = document.getElementById(`dateWarn-${key}`) || document.getElementById(`dateWarn-${item.code}`) || document.getElementById(`dateWarn-${item.requestReferenceId}`);
             if (iconEl) {
-              iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="OK: Jednodenní výpis"></i>`;
+              const dateText = item.date ? ` (${formatDateCz(item.date)})` : '';
+              iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="OK: Výpis${dateText}"></i>`;
             }
           }
         }));
