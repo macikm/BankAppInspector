@@ -207,6 +207,100 @@
       color: #00796b !important;
     }
 
+    /* Count Badges next to section titles in Light Mode */
+    html.light span[id^="cnt"] {
+      background-color: #e6f4f1 !important;
+      color: #00796b !important;
+      border-color: #99d8cb !important;
+    }
+
+    /* Per-Section Pagination Containers & Controls in Light Mode */
+    html.light .bg-gray-950\/80,
+    html.light .bg-gray-950 {
+      background-color: #f1f5f9 !important;
+      color: #1e293b !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    html.light .bg-gray-950\/80 span,
+    html.light .bg-gray-950\/80 button {
+      color: #475569 !important;
+    }
+
+    html.light .bg-gray-950\/80 button:hover {
+      color: #0f172a !important;
+    }
+
+    html.light .bg-gray-950\/80 select {
+      color: #009688 !important;
+    }
+
+    html.light .bg-gray-950\/80 select option {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+    }
+
+    html.light .bg-gray-950\/80 strong {
+      color: #009688 !important;
+    }
+
+    /* Request Ref ID Pill Styling */
+    .btn-ref-id {
+      background-color: rgba(30, 58, 138, 0.6);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.5);
+    }
+
+    .btn-ref-id:hover {
+      background-color: rgba(49, 46, 129, 0.8);
+      color: #ffffff;
+    }
+
+    html.light .btn-ref-id {
+      background-color: #e6f4f1 !important;
+      color: #00796b !important;
+      border: 1px solid #99d8cb !important;
+      font-weight: 600 !important;
+    }
+
+    html.light .btn-ref-id:hover {
+      background-color: #cceeee !important;
+      color: #004d40 !important;
+    }
+
+    html.light .btn-ref-id i {
+      color: #009688 !important;
+    }
+
+    /* Propojení Button Styling (AVAplace Corporate Teal Action) */
+    .btn-action-propojeni {
+      background-color: rgba(13, 148, 136, 0.25);
+      color: #2dd4bf;
+      border: 1px solid rgba(20, 184, 166, 0.5);
+    }
+
+    .btn-action-propojeni:hover {
+      background-color: rgba(13, 148, 136, 0.45);
+      color: #ffffff;
+    }
+
+    html.light .btn-action-propojeni {
+      background-color: #009688 !important;
+      color: #ffffff !important;
+      border: 1px solid #008080 !important;
+      font-weight: 600 !important;
+      box-shadow: 0 1px 3px rgba(0, 150, 136, 0.3) !important;
+    }
+
+    html.light .btn-action-propojeni:hover {
+      background-color: #008080 !important;
+      color: #ffffff !important;
+    }
+
+    html.light .btn-action-propojeni i {
+      color: #ffffff !important;
+    }
+
     /* ERP Section Header styling */
     html.dark .erp-section-header {
       background-color: rgba(120, 53, 15, 0.25);
@@ -262,15 +356,15 @@
     }
 
     html.light .btn-action-emerald {
-      background-color: #d1fae5 !important;
-      color: #065f46 !important;
-      border: 1px solid #6ee7b7 !important;
+      background-color: #dcfce7 !important;
+      color: #15803d !important;
+      border: 1px solid #86efac !important;
       font-weight: 600 !important;
     }
 
     html.light .btn-action-emerald:hover {
-      background-color: #a7f3d0 !important;
-      color: #044e37 !important;
+      background-color: #bbf7d0 !important;
+      color: #166534 !important;
     }
 
     .btn-action-blue {
@@ -285,15 +379,15 @@
     }
 
     html.light .btn-action-blue {
-      background-color: #dbeafe !important;
-      color: #1e40af !important;
-      border: 1px solid #93c5fd !important;
+      background-color: #e6f4f1 !important;
+      color: #00796b !important;
+      border: 1px solid #99d8cb !important;
       font-weight: 600 !important;
     }
 
     html.light .btn-action-blue:hover {
-      background-color: #bfdbfe !important;
-      color: #1e3a8a !important;
+      background-color: #cceeee !important;
+      color: #004d40 !important;
     }
 
     .btn-action-indigo {
@@ -308,15 +402,15 @@
     }
 
     html.light .btn-action-indigo {
-      background-color: #e0e7ff !important;
-      color: #3730a3 !important;
-      border: 1px solid #a5b4fc !important;
+      background-color: #e0f2fe !important;
+      color: #0369a1 !important;
+      border: 1px solid #bae6fd !important;
       font-weight: 600 !important;
     }
 
     html.light .btn-action-indigo:hover {
-      background-color: #c7d2fe !important;
-      color: #312e81 !important;
+      background-color: #bae6fd !important;
+      color: #075985 !important;
     }
 
     .btn-action-info {
@@ -2087,10 +2181,10 @@
           <td class="p-3 text-xs text-gray-400">${item.date ? new Date(item.date).toLocaleString('cs-CZ') : '-'}</td>
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
           <td class="p-3 text-center"><span class="px-2 py-0.5 bg-gray-800 text-blue-400 rounded font-mono font-bold">${item.numberOfStatements ?? 0}</span></td>
-          <td class="p-3 font-mono text-xs">
+          <td class="p-3 font-mono text-xs font-medium">
             ${item.requestReferenceId ? `
-              <button onclick="linkToRef('${item.requestReferenceId}')" title="Vyhledat a propojit s Bankovním/ERP záznamem" class="px-2 py-1 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 rounded border border-indigo-700/60 flex items-center gap-1.5 transition">
-                <i class="fa-solid fa-link text-indigo-400 text-[11px]"></i>
+              <button onclick="linkToRef('${item.requestReferenceId}')" title="Vyhledat a propojit s Bankovním/ERP záznamem" class="px-2 py-1 btn-ref-id rounded flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-link text-[11px]"></i>
                 <span class="truncate max-w-[130px] font-mono text-xs">${item.requestReferenceId}</span>
               </button>
             ` : '-'}
@@ -2098,7 +2192,7 @@
           <td class="p-3 flex items-center gap-1.5">
             ${item.requestReferenceId || item.code ? `<button onclick="fetchReqDataFromDS('${item.requestReferenceId || item.code}')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-blue"><i class="fa-solid fa-file-export"></i> Požadavek</button>` : ''}
             ${item.statementJsonFileReferenceId ? `<button onclick="fetchMaintenanceFile('${item.statementJsonFileReferenceId}')" title="Načíst stažený výpis (JSON)" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-indigo"><i class="fa-solid fa-file-import"></i> Výpis</button>` : ''}
-            ${item.requestReferenceId ? `<button onclick="linkToRef('${item.requestReferenceId}')" title="Filtrovat propojené zprávy v bance" class="px-2 py-1 bg-purple-950/70 hover:bg-purple-900 text-purple-300 border border-purple-700/60 text-xs rounded flex items-center gap-1"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
+            ${item.requestReferenceId ? `<button onclick="linkToRef('${item.requestReferenceId}')" title="Filtrovat propojené zprávy v bance" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-propojeni"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
             <button onclick="showDetailModal('Detail Výpisu', ${JSON.stringify(item).replace(/"/g, '&quot;')})" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
           </td>
         </tr>
@@ -2128,10 +2222,10 @@
           <td class="p-3 text-xs text-gray-400">${item.date ? new Date(item.date).toLocaleString('cs-CZ') : '-'}</td>
           <td class="p-3 font-mono text-xs">${item.typeLocalized || item.type || '-'}</td>
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
-          <td class="p-3 font-mono text-xs">
+          <td class="p-3 font-mono text-xs font-medium">
             ${item.requestReferenceId ? `
-              <button onclick="linkToRef('${item.requestReferenceId}')" title="Vyhledat propojenou žádost o výpis" class="px-2 py-1 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 rounded border border-indigo-700/60 flex items-center gap-1.5 transition">
-                <i class="fa-solid fa-link text-indigo-400 text-[11px]"></i>
+              <button onclick="linkToRef('${item.requestReferenceId}')" title="Vyhledat propojenou žádost o výpis" class="px-2 py-1 btn-ref-id rounded flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-link text-[11px]"></i>
                 <span class="truncate max-w-[130px] font-mono text-xs">${item.requestReferenceId}</span>
               </button>
             ` : '-'}
@@ -2139,7 +2233,7 @@
           <td class="p-3 flex items-center gap-1.5">
             ${item.requestReferenceId || item.code ? `<button onclick="fetchReqDataFromDS('${item.requestReferenceId || item.code}')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-blue"><i class="fa-solid fa-file-export"></i> Požadavek</button>` : ''}
             ${item.responseJsonId ? `<button onclick="fetchMaintenanceFile('${item.responseJsonId}')" title="Načíst odpověď banky" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-indigo"><i class="fa-solid fa-file-import"></i> Odpověď</button>` : ''}
-            ${item.requestReferenceId ? `<button onclick="linkToRef('${item.requestReferenceId}')" title="Filtrovat propojenou žádost o výpis" class="px-2 py-1 bg-purple-950/70 hover:bg-purple-900 text-purple-300 border border-purple-700/60 text-xs rounded flex items-center gap-1"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
+            ${item.requestReferenceId ? `<button onclick="linkToRef('${item.requestReferenceId}')" title="Filtrovat propojenou žádost o výpis" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-propojeni"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
             <button onclick="showDetailModal('Detail Bank Zprávy', ${JSON.stringify(item).replace(/"/g, '&quot;')})" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
           </td>
         </tr>
@@ -2200,7 +2294,7 @@
           <td class="p-3 flex items-center gap-1.5">
             ${item.requestReferenceId || item.code ? `<button onclick="fetchReqDataFromDS('${item.requestReferenceId || item.code}')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-code"></i> Požadavek</button>` : ''}
             ${item.responseJsonId ? `<button onclick="fetchMaintenanceFile('${item.responseJsonId}')" title="Načíst odpověď z banky / systému" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-reply"></i> Odpověď</button>` : ''}
-            ${item.requestReferenceId || item.code ? `<button onclick="linkToRef('${item.requestReferenceId || item.code}')" title="Filtrovat propojené zprávy" class="px-2 py-1 bg-purple-950/70 hover:bg-purple-900 text-purple-300 border border-purple-700/60 text-xs rounded flex items-center gap-1"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
+            ${item.requestReferenceId || item.code ? `<button onclick="linkToRef('${item.requestReferenceId || item.code}')" title="Filtrovat propojené zprávy" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-propojeni"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
             <button onclick="showDetailModal('Detail ERP Zprávy', ${JSON.stringify(item).replace(/"/g, '&quot;')})" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
           </td>
         </tr>
