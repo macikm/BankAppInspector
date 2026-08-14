@@ -25,13 +25,13 @@
           },
           colors: {
             brand: {
-              50: '#eff6ff',
-              100: '#dbeafe',
-              500: '#3b82f6',
-              600: '#2563eb',
-              700: '#1d4ed8',
-              800: '#1e40af',
-              900: '#1e3a8a',
+              50: '#f0fdfa',
+              100: '#ccfbf1',
+              500: '#14b8a6',
+              600: '#009688',
+              700: '#0f766e',
+              800: '#115e59',
+              900: '#134e4a',
             },
             darkbg: '#0b0f19',
             cardbg: '#111827',
@@ -52,8 +52,8 @@
     }
 
     html.light body {
-      background-color: #fafafa;
-      color: #18181b;
+      background-color: #f2f6f8;
+      color: #1e293b;
     }
 
     html.dark .glass-panel {
@@ -64,96 +64,134 @@
 
     html.light .glass-panel {
       background: #ffffff;
-      border: 1px solid #e4e4e7;
-      box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.06);
     }
 
     html.light .bg-gray-900,
     html.light .bg-gray-950,
     html.light .bg-gray-900\/90,
-    html.light .bg-gray-900\/80 {
-      background-color: #fafafa !important;
-      color: #18181b !important;
-      border-color: #e4e4e7 !important;
+    html.light .bg-gray-900\/80,
+    html.light .bg-gray-900\/40 {
+      background-color: #ffffff !important;
+      color: #1e293b !important;
+      border-color: #e2e8f0 !important;
     }
 
     html.light th {
-      background-color: #f4f4f5 !important;
-      color: #27272a !important;
+      background-color: #eaf1f4 !important;
+      color: #0f172a !important;
       font-weight: 700 !important;
-      border-bottom: 2px solid #e4e4e7 !important;
+      border-bottom: 2px solid #cbd5e1 !important;
     }
 
     html.light tr:hover {
-      background-color: #f4f4f5 !important;
+      background-color: #f1f6f9 !important;
     }
 
     html.light td {
-      border-color: #e4e4e7 !important;
-      color: #18181b !important;
+      border-color: #e2e8f0 !important;
+      color: #1e293b !important;
     }
 
     html.light .text-white {
-      color: #09090b !important;
+      color: #0f172a !important;
     }
 
     html.light td .text-gray-400,
     html.light td .text-gray-500 {
-      color: #52525b !important;
+      color: #64748b !important;
     }
 
     html.light input,
     html.light select,
     html.light textarea {
       background-color: #ffffff !important;
-      color: #18181b !important;
-      border-color: #d4d4d8 !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    html.light input:focus,
+    html.light select:focus,
+    html.light textarea:focus {
+      border-color: #009688 !important;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(0, 150, 136, 0.2) !important;
     }
 
     html.light .text-gray-400 {
-      color: #71717a;
+      color: #64748b;
     }
 
     html.light .text-gray-300 {
-      color: #27272a;
+      color: #334155;
+    }
+
+    html.light .text-gray-200,
+    html.light .text-gray-100 {
+      color: #0f172a;
     }
 
     html.light .border-gray-800,
     html.light .border-gray-700 {
-      border-color: #e4e4e7 !important;
+      border-color: #e2e8f0 !important;
     }
 
     html.light .bg-gray-800 {
-      background-color: #f4f4f5 !important;
-      color: #18181b !important;
+      background-color: #f1f5f9 !important;
+      color: #0f172a !important;
     }
 
     html.light .bg-gray-800:hover {
-      background-color: #e4e4e7 !important;
+      background-color: #e2e8f0 !important;
+    }
+
+    /* Primary Buttons & Accents in Light Mode (AVAplace Corporate Teal) */
+    html.light .bg-blue-600 {
+      background-color: #009688 !important;
+      color: #ffffff !important;
+      box-shadow: 0 2px 6px rgba(0, 150, 136, 0.25) !important;
+    }
+
+    html.light .bg-blue-600:hover {
+      background-color: #008080 !important;
+    }
+
+    html.light .text-blue-400,
+    html.light .text-blue-500,
+    html.light .text-blue-600 {
+      color: #009688 !important;
+    }
+
+    /* Tab navigation active state in light mode */
+    html.light .tab-btn.border-blue-500 {
+      color: #009688 !important;
+      border-color: #009688 !important;
+      font-weight: 700 !important;
     }
 
     html.light #rawConsole,
     html.light #detailModalContent {
-      background-color: #0b0f19 !important;
-      color: #f3f4f6 !important;
-      border: 1px solid #1f2937 !important;
+      background-color: #0f172a !important;
+      color: #f8fafc !important;
+      border: 1px solid #334155 !important;
     }
 
     html.light #detailModalSummary {
-      background-color: #f4f4f5 !important;
-      border-color: #e4e4e7 !important;
+      background-color: #f1f5f9 !important;
+      border-color: #e2e8f0 !important;
     }
 
     html.light #detailModalSummary .text-blue-400 {
-      color: #2563eb !important;
+      color: #009688 !important;
     }
 
     html.light #detailModalSummary .text-white {
-      color: #09090b !important;
+      color: #0f172a !important;
     }
 
     html.light #detailModalSummary .text-amber-300 {
-      color: #b45309 !important;
+      color: #d97706 !important;
     }
 
     html.light #detailModalSummary .text-gray-300 {
@@ -161,12 +199,12 @@
     }
 
     html.light #topTenantContainer {
-      background-color: #ecfdf5 !important;
-      border-color: #a7f3d0 !important;
+      background-color: #e6f4f1 !important;
+      border-color: #99d8cb !important;
     }
 
     html.light #topTenantInput {
-      color: #047857 !important;
+      color: #00796b !important;
     }
 
     /* ERP Section Header styling */
