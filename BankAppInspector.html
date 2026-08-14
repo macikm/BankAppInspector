@@ -1438,13 +1438,74 @@
     function formatJsonToSyntaxHtml(jsonObj) {
       if (!jsonObj) return '<span class="text-gray-500 italic">Žádná data</span>';
 
+      let errorHeaderHtml = '';
       let rawStr = '';
+      let targetObj = jsonObj;
+      let isFormattedJson = false;
+
       if (typeof jsonObj === 'string') {
-        rawStr = jsonObj;
+        let trimmed = jsonObj.trim();
+
+        // 1. Try parsing directly as a JSON object/array
         try {
-          const parsed = JSON.parse(jsonObj);
-          rawStr = JSON.stringify(parsed, null, 2);
+          const direct = JSON.parse(trimmed);
+          if (typeof direct === 'object' && direct !== null) {
+            targetObj = direct;
+            rawStr = JSON.stringify(targetObj, null, 2);
+            isFormattedJson = true;
+          } else if (typeof direct === 'string') {
+            trimmed = direct.trim();
+          }
         } catch (e) {
+          // Not directly valid JSON object/array
+        }
+
+        // 2. If not parsed directly as object/array, check if string starts with error/HTTP prefix + JSON payload
+        if (!isFormattedJson) {
+          const firstJsonIdx = trimmed.search(/[\{\[]/);
+          if (firstJsonIdx > 0) {
+            const rawPrefix = trimmed.substring(0, firstJsonIdx).trim();
+            const jsonCandidate = trimmed.substring(firstJsonIdx).trim();
+            const lastJsonIdx = Math.max(jsonCandidate.lastIndexOf('}'), jsonCandidate.lastIndexOf(']'));
+
+            if (lastJsonIdx !== -1) {
+              const possibleJsonStr = jsonCandidate.substring(0, lastJsonIdx + 1);
+              const suffix = jsonCandidate.substring(lastJsonIdx + 1).trim();
+
+              try {
+                targetObj = JSON.parse(possibleJsonStr);
+                rawStr = JSON.stringify(targetObj, null, 2);
+                isFormattedJson = true;
+
+                // Extract HTTP status code if present (e.g., HTTP 400, HTTP - 400, 400 Bad Request, etc.)
+                const httpMatch = rawPrefix.match(/HTTP(?:\s*-\s*|\s+)(\d{3})/i) || rawPrefix.match(/(\d{3})/);
+                const statusCode = httpMatch ? httpMatch[1] : null;
+
+                errorHeaderHtml = `
+                  <div class="mb-4 p-3 bg-red-950/40 border border-red-800/60 rounded-xl text-red-200 text-xs font-sans flex flex-col gap-1.5 shadow-inner">
+                    <div class="flex items-center gap-2 font-semibold">
+                      <i class="fa-solid fa-triangle-exclamation text-red-400 text-sm"></i>
+                      <span class="text-red-300">Chyba v odpovědi:</span>
+                      ${statusCode ? `<span class="px-2 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded font-mono font-bold text-xs">HTTP ${statusCode}</span>` : ''}
+                    </div>
+                    <div class="text-red-200/90 font-mono text-xs break-all bg-red-900/30 px-2.5 py-1.5 rounded border border-red-800/40">
+                      ${escapeHtml(rawPrefix)}
+                    </div>
+                    ${suffix ? `<div class="text-xs text-red-300/80 font-mono">${escapeHtml(suffix)}</div>` : ''}
+                  </div>
+                  <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <i class="fa-solid fa-code text-blue-400"></i> JSON tělo odpovědi:
+                  </div>
+                `;
+              } catch (e2) {
+                // Parsing candidate failed
+              }
+            }
+          }
+        }
+
+        if (!isFormattedJson) {
+          currentModalRawText = jsonObj;
           return `<pre class="text-green-400 font-mono text-xs whitespace-pre-wrap">${escapeHtml(jsonObj)}</pre>`;
         }
       } else {
@@ -1471,7 +1532,7 @@
         return `<span class="${cls}">${match}</span>`;
       });
 
-      return `<pre class="font-mono text-xs leading-relaxed whitespace-pre-wrap">${highlighted}</pre>`;
+      return `${errorHeaderHtml}<pre class="font-mono text-xs leading-relaxed whitespace-pre-wrap">${highlighted}</pre>`;
     }
 
     function escapeHtml(str) {
