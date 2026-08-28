@@ -641,12 +641,6 @@
             </button>
           </div>
 
-          <!-- Loading indicator inside dropdown panel -->
-          <div id="tenantDropdownLoading" class="hidden p-2 text-center text-teal-400 text-xs font-medium bg-teal-950/40 rounded-lg border border-teal-800/40 flex items-center justify-center gap-2">
-            <i class="fa-solid fa-circle-notch fa-spin"></i>
-            <span>Načítám seznam tenantů z IDP...</span>
-          </div>
-
           <!-- Tenant options list (Alphabetically sorted A-Z) -->
           <div id="tenantOptionsList" class="max-h-60 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
             <!-- Rendered dynamically -->
@@ -1661,9 +1655,11 @@
       return Array.from(fetchedMap.values());
     }
 
+    let isFetchingTenants = false;
+
     async function fetchAndPopulateTenants() {
-      const dropdownLoading = document.getElementById('tenantDropdownLoading');
-      if (dropdownLoading) dropdownLoading.classList.remove('hidden');
+      if (isFetchingTenants) return;
+      isFetchingTenants = true;
 
       if (config.tenantId && !knownTenantsMap.has(config.tenantId)) {
         knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
@@ -1676,15 +1672,15 @@
         const idpTenants = await fetchUserTenantsFromIdp();
         if (idpTenants && idpTenants.length > 0) {
           for (const t of idpTenants) {
-            knownTenantsMap.set(t.id, t);
+            if (t && t.id) knownTenantsMap.set(t.id, t);
           }
           const toCache = Array.from(knownTenantsMap.values());
           localStorage.setItem('bankapp_cached_tenants', JSON.stringify(toCache));
         }
       } catch (e) {
-        // Silent catch
+        logConsole("Načtení tenantů selhalo", e.message);
       } finally {
-        if (dropdownLoading) dropdownLoading.classList.add('hidden');
+        isFetchingTenants = false;
       }
 
       if (config.tenantId && !knownTenantsMap.has(config.tenantId)) {
@@ -1871,8 +1867,10 @@
         updateStatusUI(false, "Vyžaduje přihlášení");
       }
 
-      fetchAndPopulateTenants();
-      await refreshData();
+      await Promise.allSettled([
+        fetchAndPopulateTenants(),
+        refreshData()
+      ]);
     });
 
     async function onTenantTopChanged(newVal) {
@@ -1902,8 +1900,10 @@
         logConsole("Upozornění: Získání tokenu pro nový tenant selhalo", e.message);
       }
 
-      fetchAndPopulateTenants();
-      await refreshData();
+      await Promise.allSettled([
+        fetchAndPopulateTenants(),
+        refreshData()
+      ]);
     }
 
     function logConsole(msg, obj = null) {
