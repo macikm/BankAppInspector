@@ -205,8 +205,40 @@
       border-color: #99d8cb !important;
     }
 
-    html.light #topTenantInput {
+    html.light #tenantDropdownTrigger {
       color: #00796b !important;
+    }
+
+    html.light #tenantDropdownTrigger:hover {
+      background-color: rgba(0, 121, 107, 0.1) !important;
+    }
+
+    html.light #tenantDropdownPanel {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    html.light #tenantSearchInput,
+    html.light #tenantManualInput {
+      background-color: #f8fafc !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    html.light .tenant-option-item {
+      color: #1e293b !important;
+    }
+
+    html.light .tenant-option-item:hover {
+      background-color: #e6f4f1 !important;
+      color: #00796b !important;
+    }
+
+    html.light .tenant-option-item.selected {
+      background-color: #ccfbf1 !important;
+      color: #0f766e !important;
+      border-color: #99d8cb !important;
     }
 
     /* Count Badges next to section titles in Light Mode */
@@ -556,16 +588,56 @@
         <span id="themeText" class="text-xs font-medium hidden sm:inline">Tmavý režim</span>
       </button>
 
-      <!-- Dynamic Tenant ID Input in Header -->
+      <!-- Dynamic Tenant ID Switcher & Dropdown in Header -->
       <div id="topTenantContainer"
-        class="flex items-center space-x-2 bg-gray-900/90 border border-green-500/30 px-3 py-1.5 rounded-xl shadow-lg shadow-green-900/10 transition">
-        <i class="fa-solid fa-building-user text-green-500"></i>
-        <span class="text-xs text-gray-400 font-medium hidden sm:inline">Tenant ID:</span>
-        <input type="text" id="topTenantInput" onchange="onTenantTopChanged(this.value)"
-          placeholder="Zadejte Tenant ID..."
-          class="bg-transparent font-mono text-sm text-green-400 font-semibold focus:outline-none w-[480px] max-w-full border-b border-transparent focus:border-green-400 transition">
+        class="relative flex items-center bg-gray-900/90 border border-green-500/30 px-3 py-1.5 rounded-xl shadow-lg shadow-green-900/10 transition">
+        <i class="fa-solid fa-building-user text-green-500 mr-2"></i>
+        <span class="text-xs text-gray-400 font-medium hidden sm:inline mr-2">Tenant:</span>
+        
+        <!-- Dropdown trigger button showing selected tenant -->
+        <button type="button" id="tenantDropdownTrigger" onclick="toggleTenantDropdown(event)"
+          class="flex items-center justify-between gap-2 font-mono text-sm text-green-400 font-semibold focus:outline-none w-[380px] max-w-full text-left truncate py-0.5 px-2 rounded-lg hover:bg-gray-800/60 transition">
+          <span id="tenantDropdownLabel" class="truncate">Načítám tenanty...</span>
+          <i class="fa-solid fa-chevron-down text-xs text-green-500/70 transition-transform duration-200" id="tenantDropdownChevron"></i>
+        </button>
+
+        <!-- Searchable Dropdown Panel -->
+        <div id="tenantDropdownPanel"
+          class="hidden absolute top-full left-0 mt-2 w-[440px] max-w-[90vw] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 p-2 space-y-2 text-xs">
+          <!-- Incremental search input (Postupné vyhledávání A-Z) -->
+          <div class="relative flex items-center">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 text-gray-400 text-xs"></i>
+            <input type="text" id="tenantSearchInput" oninput="onTenantSearchInput(this.value)"
+              placeholder="Postupné vyhledávání tenanta (A-Z)..."
+              class="w-full bg-gray-950 border border-gray-700 rounded-lg pl-8 pr-8 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-green-500 font-medium">
+            <button id="clearTenantSearchBtn" onclick="clearTenantSearch()" class="hidden absolute right-2 text-gray-400 hover:text-white px-1">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <!-- Tenant options list (Alphabetically sorted A-Z) -->
+          <div id="tenantOptionsList" class="max-h-60 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+            <!-- Rendered dynamically -->
+          </div>
+
+          <!-- Manual Tenant ID Entry Section -->
+          <div id="tenantManualSection" class="border-t border-gray-800/80 pt-2 hidden space-y-2">
+            <div class="text-[11px] text-amber-400 font-medium flex items-center gap-1.5">
+              <i class="fa-solid fa-pen-to-square"></i> Ruční zadání Tenant ID:
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="text" id="tenantManualInput" placeholder="Zadejte vlastný Tenant ID..."
+                class="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-green-400 font-mono focus:outline-none focus:border-green-500">
+              <button type="button" onclick="submitManualTenant()"
+                class="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white font-medium rounded-lg text-xs transition flex items-center gap-1">
+                <i class="fa-solid fa-check"></i> Použít
+              </button>
+            </div>
+          </div>
+        </div>
+
         <button onclick="refreshData()" title="Obnovit pro nový Tenant"
-          class="text-green-500 hover:text-green-400 transition px-1">
+          class="text-green-500 hover:text-green-400 transition px-1 ml-2">
           <i class="fa-solid fa-arrow-rotate-right text-xs"></i>
         </button>
       </div>
@@ -1472,7 +1544,248 @@
       return config.accessToken;
     }
 
-    // Initialize Header tenant input & saved theme
+    // Known / default tenants map
+    let knownTenantsMap = new Map([
+      ['ICEnergo-498e5a27-3e95-4ff3-88fd-357e0a9450aa', { id: 'ICEnergo-498e5a27-3e95-4ff3-88fd-357e0a9450aa', name: 'IC Energo' }],
+      ['ASOLEU', { id: 'ASOLEU', name: 'Asseco Solutions' }]
+    ]);
+
+    async function fetchUserTenantsFromIdp() {
+      if (!config.accessToken) return [];
+
+      const idpBaseUrl = config.baseUrl.includes('localhost')
+        ? 'https://dev.avaplace.com/api/asol/idp'
+        : `${config.baseUrl}/api/asol/idp`;
+
+      const headers = {
+        'Authorization': `Bearer ${config.accessToken}`,
+        'Accept': 'application/json'
+      };
+      if (config.tenantId) {
+        headers['X-Tenant'] = config.tenantId;
+      }
+
+      const fetchedMap = new Map();
+
+      async function fetchPages(endpoint) {
+        let offset = 0;
+        const limit = 1000;
+        while (true) {
+          try {
+            const url = `${idpBaseUrl}${endpoint}?Limit=${limit}&Offset=${offset}`;
+            const res = await fetch(url, { headers });
+            if (!res.ok) break;
+            const data = await res.json();
+            const items = Array.isArray(data) ? data : (data && data.items ? data.items : null);
+            if (!items || !Array.isArray(items) || items.length === 0) break;
+
+            for (const t of items) {
+              const tid = t.id || t.tenantId;
+              if (tid) {
+                const name = t.name || t.tenantName || tid;
+                fetchedMap.set(tid, { id: tid, name: name });
+              }
+            }
+
+            const totalCount = data ? data.totalCount : null;
+            if (totalCount !== null && totalCount !== undefined) {
+              if (offset + items.length >= totalCount) break;
+            } else {
+              if (items.length < limit) break;
+            }
+            offset += items.length;
+          } catch (e) {
+            break;
+          }
+        }
+      }
+
+      await fetchPages('/api/v1/UserTenants');
+      await fetchPages('/api/v1/Tenants/childTenants');
+      if (fetchedMap.size === 0) {
+        await fetchPages('/api/v1/Tenants');
+      }
+
+      return Array.from(fetchedMap.values());
+    }
+
+    async function fetchAndPopulateTenants() {
+      if (config.tenantId && !knownTenantsMap.has(config.tenantId)) {
+        knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
+      }
+
+      try {
+        const idpTenants = await fetchUserTenantsFromIdp();
+        for (const t of idpTenants) {
+          knownTenantsMap.set(t.id, t);
+        }
+      } catch (e) {
+        // Silent fallback for guest/offline mode
+      }
+
+      if (config.tenantId && !knownTenantsMap.has(config.tenantId)) {
+        knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
+      }
+
+      updateTenantTriggerLabel();
+      renderTenantOptions();
+    }
+
+    function updateTenantTriggerLabel() {
+      const lbl = document.getElementById('tenantDropdownLabel');
+      if (!lbl) return;
+
+      const current = knownTenantsMap.get(config.tenantId);
+      if (current) {
+        lbl.textContent = (current.name && current.name !== current.id)
+          ? `${current.name} (${current.id})`
+          : current.id;
+      } else {
+        lbl.textContent = config.tenantId || 'Vyberte Tenanta...';
+      }
+    }
+
+    function renderTenantOptions(filterQuery = '') {
+      const container = document.getElementById('tenantOptionsList');
+      if (!container) return;
+
+      // Sort tenants ALPHABETICALLY (A-Z) by name or id
+      const tenantsArray = Array.from(knownTenantsMap.values());
+      tenantsArray.sort((a, b) => {
+        const nameA = (a.name || a.id).toLowerCase();
+        const nameB = (b.name || b.id).toLowerCase();
+        return nameA.localeCompare(nameB, 'cs', { sensitivity: 'base' });
+      });
+
+      // Incremental search (Postupné vyhledávání - exact substring matching, NO fuzzy logic)
+      const q = filterQuery.trim().toLowerCase();
+      const filtered = q
+        ? tenantsArray.filter(t => {
+            const searchStr = `${t.name || ''} ${t.id || ''}`.toLowerCase();
+            return searchStr.includes(q);
+          })
+        : tenantsArray;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-3 text-center text-gray-400 italic">
+            Žádný tenant neodpovídá hledání "${escapeHtml(filterQuery)}"
+          </div>
+          <button type="button" onclick="toggleManualTenantInput()" class="tenant-option-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-800/80 flex items-center gap-2 transition text-amber-400 border-t border-gray-800/80 mt-1">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>✏️ Ruční zadání ID "${escapeHtml(filterQuery)}"...</span>
+          </button>
+        `;
+        return;
+      }
+
+      let html = filtered.map(t => {
+        const isSelected = (t.id === config.tenantId);
+        const displayName = escapeHtml(t.name || t.id);
+        const displayId = escapeHtml(t.id);
+        const hasDiffName = t.name && t.name !== t.id;
+
+        return `
+          <button type="button" onclick="selectTenant('${t.id}')"
+            class="tenant-option-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-800/80 flex items-center justify-between transition ${isSelected ? 'selected bg-teal-950/60 text-teal-400 font-semibold border border-teal-500/30' : 'text-gray-200'}">
+            <div class="truncate pr-2">
+              <div class="font-medium text-xs truncate">${displayName}</div>
+              ${hasDiffName ? `<div class="text-[11px] font-mono text-gray-400 truncate">${displayId}</div>` : ''}
+            </div>
+            ${isSelected ? '<i class="fa-solid fa-check text-xs text-teal-400"></i>' : ''}
+          </button>
+        `;
+      }).join('');
+
+      html += `
+        <button type="button" onclick="toggleManualTenantInput()" class="tenant-option-item w-full text-left px-3 py-2 rounded-lg hover:bg-gray-800/80 flex items-center gap-2 transition text-amber-400 border-t border-gray-800/80 mt-1">
+          <i class="fa-solid fa-pen-to-square"></i>
+          <span>✏️ Ruční zadání ID...</span>
+        </button>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    function onTenantSearchInput(val) {
+      const clearBtn = document.getElementById('clearTenantSearchBtn');
+      if (clearBtn) {
+        if (val.trim().length > 0) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+      }
+      renderTenantOptions(val);
+    }
+
+    function clearTenantSearch() {
+      const inp = document.getElementById('tenantSearchInput');
+      const clearBtn = document.getElementById('clearTenantSearchBtn');
+      if (inp) inp.value = '';
+      if (clearBtn) clearBtn.classList.add('hidden');
+      renderTenantOptions('');
+      if (inp) inp.focus();
+    }
+
+    function toggleTenantDropdown(e) {
+      if (e) e.stopPropagation();
+      const panel = document.getElementById('tenantDropdownPanel');
+      const chevron = document.getElementById('tenantDropdownChevron');
+      if (!panel) return;
+
+      const isHidden = panel.classList.contains('hidden');
+      if (isHidden) {
+        panel.classList.remove('hidden');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+        const inp = document.getElementById('tenantSearchInput');
+        if (inp) {
+          inp.value = '';
+          inp.focus();
+        }
+        renderTenantOptions('');
+      } else {
+        closeTenantDropdown();
+      }
+    }
+
+    function closeTenantDropdown() {
+      const panel = document.getElementById('tenantDropdownPanel');
+      const chevron = document.getElementById('tenantDropdownChevron');
+      if (panel) panel.classList.add('hidden');
+      if (chevron) chevron.style.transform = 'rotate(0deg)';
+      const manualSec = document.getElementById('tenantManualSection');
+      if (manualSec) manualSec.classList.add('hidden');
+    }
+
+    function selectTenant(tenantId) {
+      closeTenantDropdown();
+      if (tenantId && tenantId.trim() !== config.tenantId) {
+        onTenantTopChanged(tenantId.trim());
+      }
+    }
+
+    function toggleManualTenantInput() {
+      const manualSec = document.getElementById('tenantManualSection');
+      const manualInp = document.getElementById('tenantManualInput');
+      if (manualSec) {
+        manualSec.classList.remove('hidden');
+        if (manualInp) {
+          const q = document.getElementById('tenantSearchInput').value.trim();
+          manualInp.value = q || config.tenantId;
+          manualInp.focus();
+          manualInp.select();
+        }
+      }
+    }
+
+    function submitManualTenant() {
+      const inp = document.getElementById('tenantManualInput');
+      if (inp && inp.value.trim()) {
+        const tid = inp.value.trim();
+        knownTenantsMap.set(tid, { id: tid, name: tid });
+        selectTenant(tid);
+      }
+    }
+
+    // Initialize Header tenant dropdown & saved theme
     document.addEventListener('DOMContentLoaded', async () => {
       const savedTheme = localStorage.getItem('bankapp_theme') || 'dark';
       if (savedTheme === 'light') {
@@ -1484,10 +1797,7 @@
         if (label) label.textContent = 'Světlý režim';
       }
 
-      const topTenantInput = document.getElementById('topTenantInput');
-      if (topTenantInput) {
-        topTenantInput.value = config.tenantId;
-      }
+      updateTenantTriggerLabel();
 
       // Ensure valid OAuth token is obtained BEFORE triggering API data calls!
       try {
@@ -1497,6 +1807,7 @@
         updateStatusUI(false, "Vyžaduje přihlášení");
       }
 
+      await fetchAndPopulateTenants();
       await refreshData();
     });
 
@@ -1504,6 +1815,12 @@
       config.tenantId = newVal.trim();
       localStorage.setItem('bankapp_tenant_id', config.tenantId);
       logConsole(`Tenant ID upraven na: ${config.tenantId}`);
+
+      if (!knownTenantsMap.has(config.tenantId)) {
+        knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
+      }
+      updateTenantTriggerLabel();
+      renderTenantOptions();
 
       // Reset cached token and acquire fresh OAuth token bound to new Tenant ID BEFORE fetching data
       config.accessToken = null;
@@ -1514,6 +1831,7 @@
         logConsole("Upozornění: Získání tokenu pro nový tenant selhalo", e.message);
       }
 
+      await fetchAndPopulateTenants();
       await refreshData();
     }
 
@@ -1536,9 +1854,16 @@
       document.getElementById('detailModal').classList.add('hidden');
     }
 
-    // Keydown listener for Escape key to close open modals
+    // Keydown listener for Escape key to close open modals or tenant dropdown
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' || e.keyCode === 27) {
+        const tenantPanel = document.getElementById('tenantDropdownPanel');
+        if (tenantPanel && !tenantPanel.classList.contains('hidden')) {
+          closeTenantDropdown();
+          e.preventDefault();
+          return;
+        }
+
         const detailModal = document.getElementById('detailModal');
         const configModal = document.getElementById('configModal');
 
@@ -1552,7 +1877,7 @@
       }
     });
 
-    // Backdrop click listener to close modals when clicking outside content area
+    // Backdrop & outside click listener
     window.addEventListener('DOMContentLoaded', function () {
       const detailModal = document.getElementById('detailModal');
       const configModal = document.getElementById('configModal');
@@ -1567,6 +1892,13 @@
           if (e.target === configModal) configModal.classList.add('hidden');
         });
       }
+
+      window.addEventListener('click', function (e) {
+        const container = document.getElementById('topTenantContainer');
+        if (container && !container.contains(e.target)) {
+          closeTenantDropdown();
+        }
+      });
     });
 
     function formatJsonToSyntaxHtml(jsonObj) {
