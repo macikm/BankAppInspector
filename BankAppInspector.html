@@ -241,6 +241,18 @@
       border-color: #99d8cb !important;
     }
 
+    html.light #tenantDataLoadingBadge {
+      background-color: #ccfbf1 !important;
+      color: #0f766e !important;
+      border-color: #5eead4 !important;
+    }
+
+    html.light #tenantDataSuccessBadge {
+      background-color: #dcfce7 !important;
+      color: #166534 !important;
+      border-color: #86efac !important;
+    }
+
     /* Count Badges next to section titles in Light Mode */
     html.light span[id^="cnt"] {
       background-color: #e6f4f1 !important;
@@ -590,16 +602,30 @@
 
       <!-- Dynamic Tenant ID Switcher & Dropdown in Header -->
       <div id="topTenantContainer"
-        class="relative flex items-center bg-gray-900/90 border border-green-500/30 px-3 py-1.5 rounded-xl shadow-lg shadow-green-900/10 transition">
-        <i class="fa-solid fa-building-user text-green-500 mr-2"></i>
-        <span class="text-xs text-gray-400 font-medium hidden sm:inline mr-2">Tenant:</span>
-        
-        <!-- Dropdown trigger button showing selected tenant -->
-        <button type="button" id="tenantDropdownTrigger" onclick="toggleTenantDropdown(event)"
-          class="flex items-center justify-between gap-2 font-mono text-sm text-green-400 font-semibold focus:outline-none w-[380px] max-w-full text-left truncate py-0.5 px-2 rounded-lg hover:bg-gray-800/60 transition">
-          <span id="tenantDropdownLabel" class="truncate">Načítám tenanty...</span>
-          <i class="fa-solid fa-chevron-down text-xs text-green-500/70 transition-transform duration-200" id="tenantDropdownChevron"></i>
-        </button>
+        class="relative flex flex-wrap items-center bg-gray-900/90 border border-green-500/30 px-3 py-1.5 rounded-xl shadow-lg shadow-green-900/10 transition gap-2">
+        <div class="flex items-center">
+          <i class="fa-solid fa-building-user text-green-500 mr-2"></i>
+          <span class="text-xs text-gray-400 font-medium hidden sm:inline mr-1.5">Tenant:</span>
+          
+          <!-- Dropdown trigger button showing selected tenant -->
+          <button type="button" id="tenantDropdownTrigger" onclick="toggleTenantDropdown(event)"
+            class="flex items-center justify-between gap-2 font-mono text-sm text-green-400 font-semibold focus:outline-none w-[340px] max-w-full text-left truncate py-0.5 px-2 rounded-lg hover:bg-gray-800/60 transition">
+            <span id="tenantDropdownLabel" class="truncate">Načítám tenanty...</span>
+            <i class="fa-solid fa-chevron-down text-xs text-green-500/70 transition-transform duration-200" id="tenantDropdownChevron"></i>
+          </button>
+        </div>
+
+        <!-- Explicit Loading & Completion Status Badges -->
+        <div id="tenantStatusBadgeContainer" class="flex items-center">
+          <span id="tenantDataLoadingBadge" class="hidden px-3 py-1 rounded-lg bg-teal-950/90 text-teal-300 border border-teal-500/50 text-xs font-mono font-bold flex items-center gap-2 shadow-lg animate-pulse">
+            <i class="fa-solid fa-circle-notch fa-spin text-teal-400 text-xs"></i>
+            <span>Načítám data...</span>
+          </span>
+          <span id="tenantDataSuccessBadge" class="hidden px-3 py-1 rounded-lg bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 text-xs font-mono font-bold flex items-center gap-1.5 shadow-md">
+            <i class="fa-solid fa-circle-check text-emerald-400 text-xs"></i>
+            <span id="tenantDataSuccessText">Načteno</span>
+          </span>
+        </div>
 
         <!-- Searchable Dropdown Panel -->
         <div id="tenantDropdownPanel"
@@ -613,6 +639,12 @@
             <button id="clearTenantSearchBtn" onclick="clearTenantSearch()" class="hidden absolute right-2 text-gray-400 hover:text-white px-1">
               <i class="fa-solid fa-xmark"></i>
             </button>
+          </div>
+
+          <!-- Loading indicator inside dropdown panel -->
+          <div id="tenantDropdownLoading" class="hidden p-2 text-center text-teal-400 text-xs font-medium bg-teal-950/40 rounded-lg border border-teal-800/40 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>Načítám seznam tenantů z IDP...</span>
           </div>
 
           <!-- Tenant options list (Alphabetically sorted A-Z) -->
@@ -637,7 +669,7 @@
         </div>
 
         <button onclick="refreshData()" title="Obnovit pro nový Tenant"
-          class="text-green-500 hover:text-green-400 transition px-1 ml-2">
+          class="text-green-500 hover:text-green-400 transition px-1 ml-auto">
           <i class="fa-solid fa-arrow-rotate-right text-xs"></i>
         </button>
       </div>
@@ -1550,6 +1582,19 @@
       ['ASOLEU', { id: 'ASOLEU', name: 'Asseco Solutions' }]
     ]);
 
+    // Load cached tenants from localStorage if available
+    try {
+      const cachedStr = localStorage.getItem('bankapp_cached_tenants');
+      if (cachedStr) {
+        const parsed = JSON.parse(cachedStr);
+        if (Array.isArray(parsed)) {
+          for (const t of parsed) {
+            if (t && t.id) knownTenantsMap.set(t.id, t);
+          }
+        }
+      }
+    } catch (e) {}
+
     async function fetchUserTenantsFromIdp() {
       if (!config.accessToken) return [];
 
@@ -1573,7 +1618,11 @@
         while (true) {
           try {
             const url = `${idpBaseUrl}${endpoint}?Limit=${limit}&Offset=${offset}`;
-            const res = await fetch(url, { headers });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(url, { headers, signal: controller.signal });
+            clearTimeout(timeoutId);
+
             if (!res.ok) break;
             const data = await res.json();
             const items = Array.isArray(data) ? data : (data && data.items ? data.items : null);
@@ -1600,8 +1649,11 @@
         }
       }
 
-      await fetchPages('/api/v1/UserTenants');
-      await fetchPages('/api/v1/Tenants/childTenants');
+      await Promise.allSettled([
+        fetchPages('/api/v1/UserTenants'),
+        fetchPages('/api/v1/Tenants/childTenants')
+      ]);
+
       if (fetchedMap.size === 0) {
         await fetchPages('/api/v1/Tenants');
       }
@@ -1610,17 +1662,29 @@
     }
 
     async function fetchAndPopulateTenants() {
+      const dropdownLoading = document.getElementById('tenantDropdownLoading');
+      if (dropdownLoading) dropdownLoading.classList.remove('hidden');
+
       if (config.tenantId && !knownTenantsMap.has(config.tenantId)) {
         knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
       }
 
+      updateTenantTriggerLabel();
+      renderTenantOptions();
+
       try {
         const idpTenants = await fetchUserTenantsFromIdp();
-        for (const t of idpTenants) {
-          knownTenantsMap.set(t.id, t);
+        if (idpTenants && idpTenants.length > 0) {
+          for (const t of idpTenants) {
+            knownTenantsMap.set(t.id, t);
+          }
+          const toCache = Array.from(knownTenantsMap.values());
+          localStorage.setItem('bankapp_cached_tenants', JSON.stringify(toCache));
         }
       } catch (e) {
-        // Silent fallback for guest/offline mode
+        // Silent catch
+      } finally {
+        if (dropdownLoading) dropdownLoading.classList.add('hidden');
       }
 
       if (config.tenantId && !knownTenantsMap.has(config.tenantId)) {
@@ -1807,7 +1871,7 @@
         updateStatusUI(false, "Vyžaduje přihlášení");
       }
 
-      await fetchAndPopulateTenants();
+      fetchAndPopulateTenants();
       await refreshData();
     });
 
@@ -1822,6 +1886,13 @@
       updateTenantTriggerLabel();
       renderTenantOptions();
 
+      const loadingBadge = document.getElementById('tenantDataLoadingBadge');
+      const successBadge = document.getElementById('tenantDataSuccessBadge');
+      if (loadingBadge) loadingBadge.classList.remove('hidden');
+      if (successBadge) successBadge.classList.add('hidden');
+
+      setTableLoadingStates();
+
       // Reset cached token and acquire fresh OAuth token bound to new Tenant ID BEFORE fetching data
       config.accessToken = null;
       localStorage.removeItem('bankapp_access_token');
@@ -1831,7 +1902,7 @@
         logConsole("Upozornění: Získání tokenu pro nový tenant selhalo", e.message);
       }
 
-      await fetchAndPopulateTenants();
+      fetchAndPopulateTenants();
       await refreshData();
     }
 
@@ -2213,11 +2284,46 @@
       scanStatementDateMismatches(rawErpMessages);
     }
 
+    function setTableLoadingStates() {
+      const loadingHtml = (colSpan, title) => `
+        <tr class="loading-row">
+          <td colspan="${colSpan}" class="p-10 text-center text-teal-400 font-medium bg-gray-900/40">
+            <div class="flex flex-col items-center justify-center gap-2 py-4">
+              <i class="fa-solid fa-circle-notch fa-spin text-3xl text-teal-400"></i>
+              <div class="text-sm font-semibold text-gray-200">Načítám data (${title}) pro tenant: <strong class="font-mono text-teal-400 text-base">${escapeHtml(config.tenantId)}</strong></div>
+              <div class="text-xs text-gray-400">Prosím strpení, probíhá komunikace se serverem...</div>
+            </div>
+          </td>
+        </tr>
+      `;
+
+      const tbodyErp = document.getElementById('gridErpBody');
+      const tbodyStmt = document.getElementById('gridStatementsBody');
+      const tbodyBank = document.getElementById('gridBankMessagesBody');
+      const tbodyPay = document.getElementById('gridPaymentsBody');
+
+      if (tbodyErp) tbodyErp.innerHTML = loadingHtml(8, 'ERP Požadavky');
+      if (tbodyStmt) tbodyStmt.innerHTML = loadingHtml(8, 'Výpisy');
+      if (tbodyBank) tbodyBank.innerHTML = loadingHtml(8, 'Bankovní Zprávy');
+      if (tbodyPay) tbodyPay.innerHTML = loadingHtml(7, 'Dávkové Příkazy');
+    }
+
     async function refreshData() {
       if (!config.tenantId) return;
 
       const icon = document.getElementById('refreshIcon');
       if (icon) icon.classList.add('fa-spin');
+
+      const loadingBadge = document.getElementById('tenantDataLoadingBadge');
+      const successBadge = document.getElementById('tenantDataSuccessBadge');
+      const successText = document.getElementById('tenantDataSuccessText');
+
+      if (loadingBadge) loadingBadge.classList.remove('hidden');
+      if (successBadge) successBadge.classList.add('hidden');
+
+      setTableLoadingStates();
+
+      const startTime = Date.now();
 
       try {
         await Promise.all([
@@ -2226,8 +2332,17 @@
           fetchBankData(),
           fetchPaymentsData()
         ]);
+
+        if (successBadge) {
+          const timeStr = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          if (successText) successText.textContent = `Načteno (${timeStr})`;
+          successBadge.classList.remove('hidden');
+        }
+      } catch (err) {
+        logConsole("Chyba při obnově dat tenanta:", err.message);
       } finally {
         if (icon) icon.classList.remove('fa-spin');
+        if (loadingBadge) loadingBadge.classList.add('hidden');
       }
     }
 
