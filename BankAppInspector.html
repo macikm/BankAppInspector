@@ -642,7 +642,7 @@
               <i class="fa-solid fa-pen-to-square"></i> Ruční zadání Tenant ID:
             </div>
             <div class="flex items-center gap-2">
-              <input type="text" id="tenantManualInput" placeholder="Zadejte vlastný Tenant ID..."
+              <input type="text" id="tenantManualInput" placeholder="Zadejte vlastní Tenant ID..."
                 class="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-green-400 font-mono focus:outline-none focus:border-green-500">
               <button type="button" onclick="submitManualTenant()"
                 class="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white font-medium rounded-lg text-xs transition flex items-center gap-1">
@@ -786,7 +786,7 @@
             <thead class="bg-gray-900/90 text-gray-400 uppercase text-xs sticky top-0 z-10 backdrop-blur-md">
               <tr>
                 <th class="p-3">Kód</th>
-                <th class="p-3">Odoslal (Sent By)</th>
+                <th class="p-3">Odeslal (Sent By)</th>
                 <th class="p-3">Firma</th>
                 <th class="p-3">Datum</th>
                 <th class="p-3">Typ</th>
@@ -796,7 +796,7 @@
               </tr>
             </thead>
             <tbody id="gridErpBody" class="divide-y divide-gray-800/60 text-gray-300">
-              <tr><td colspan="8" class="p-6 text-center text-gray-500">Zatiaľ nebola načítaná žiadna zpráva. Zadajte Tenant ID v hornej lište.</td></tr>
+              <tr><td colspan="8" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva. Zadejte Tenant ID v horní liště.</td></tr>
             </tbody>
           </table>
         </div>
@@ -864,7 +864,7 @@
               </tr>
             </thead>
             <tbody id="gridStatementsBody" class="divide-y divide-gray-800/60 text-gray-300">
-              <tr><td colspan="8" class="p-6 text-center text-gray-500">Zatiaľ nebola načítaná žiadna zpráva. Zadajte Tenant ID v hornej lište.</td></tr>
+              <tr><td colspan="8" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva. Zadejte Tenant ID v horní liště.</td></tr>
             </tbody>
           </table>
         </div>
@@ -927,7 +927,7 @@
               </tr>
             </thead>
             <tbody id="gridBankMessagesBody" class="divide-y divide-gray-800/60 text-gray-300">
-              <tr><td colspan="8" class="p-6 text-center text-gray-500">Zatiaľ nebola načítaná žiadna zpráva.</td></tr>
+              <tr><td colspan="8" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva.</td></tr>
             </tbody>
           </table>
         </div>
@@ -984,7 +984,7 @@
             </thead>
             <tbody id="gridPaymentsBody" class="divide-y divide-gray-800/60 text-gray-300">
               <tr>
-                <td colspan="7" class="p-6 text-center text-gray-500">Zatiaľ nebola načítaná žiadna platba.</td>
+                <td colspan="7" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná platba.</td>
               </tr>
             </tbody>
           </table>
@@ -996,7 +996,7 @@
     <div id="tab-raw" class="tab-content hidden space-y-6">
       <div class="glass-panel rounded-xl p-4 space-y-4">
         <div class="flex justify-between items-center">
-          <h3 class="font-semibold text-gray-200">Konzola API Odpovedí (Raw Output)</h3>
+          <h3 class="font-semibold text-gray-200">Konzola API Odpovědí (Raw Output)</h3>
           <button onclick="document.getElementById('rawConsole').textContent = ''"
             class="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-xs rounded border border-gray-700">Vymazat log</button>
         </div>
