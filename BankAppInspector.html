@@ -533,6 +533,33 @@
       border: 1px solid #d4d4d8;
     }
 
+    /* Statement Count Badges (Zero vs Positive) */
+    .badge-count-zero {
+      background-color: rgba(127, 29, 29, 0.6);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.6);
+    }
+
+    html.light .badge-count-zero {
+      background-color: #fee2e2 !important;
+      color: #b91c1c !important;
+      border: 1px solid #f87171 !important;
+      font-weight: 700 !important;
+    }
+
+    .badge-count-positive {
+      background-color: rgba(30, 58, 138, 0.5);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.4);
+    }
+
+    html.light .badge-count-positive {
+      background-color: #e0f2fe !important;
+      color: #0369a1 !important;
+      border: 1px solid #7dd3fc !important;
+      font-weight: 700 !important;
+    }
+
     /* Resizable grid containers */
     .resizable-grid {
       resize: both;
@@ -826,6 +853,12 @@
               <option value="ERROR">Pouze CHYBY</option>
               <option value="SUCCESS">Pouze ÚSPĚŠNÉ</option>
               <option value="PROCESSING">Zpracovává se</option>
+            </select>
+
+            <select id="filterCountStmt" onchange="applyFiltersStatements()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-emerald-400 focus:outline-none focus:border-emerald-500 font-medium">
+              <option value="ALL">Všechny počty výpisů</option>
+              <option value="HAS_STATEMENTS">S výpisy (&gt; 0)</option>
+              <option value="NO_STATEMENTS">Bez výpisů (= 0 / Prázdné)</option>
             </select>
 
             <div class="relative flex items-center">
@@ -2398,13 +2431,23 @@
     // Dynamic Filter Handlers
     function applyFiltersStatements() {
       const stateFilter = document.getElementById('filterStateStmt').value;
+      const countFilter = document.getElementById('filterCountStmt') ? document.getElementById('filterCountStmt').value : 'ALL';
       const search = document.getElementById('searchStmt').value.toLowerCase();
 
       const filtered = rawStatements.filter(item => {
         const matchesState = checkStateMatch(item, stateFilter);
+
+        let matchesCount = true;
+        const count = item.numberOfStatements !== undefined && item.numberOfStatements !== null ? Number(item.numberOfStatements) : 0;
+        if (countFilter === 'HAS_STATEMENTS') {
+          matchesCount = count > 0;
+        } else if (countFilter === 'NO_STATEMENTS') {
+          matchesCount = count === 0;
+        }
+
         const matchesSearch = !search || JSON.stringify(item).toLowerCase().includes(search);
         const matchesDate = isItemInDateRange(item);
-        return matchesState && matchesSearch && matchesDate;
+        return matchesState && matchesCount && matchesSearch && matchesDate;
       });
 
       renderStatementsGrid(filtered);
@@ -2666,7 +2709,13 @@
         return;
       }
 
-      tbody.innerHTML = items.map(item => `
+      tbody.innerHTML = items.map(item => {
+        const count = item.numberOfStatements !== undefined && item.numberOfStatements !== null ? Number(item.numberOfStatements) : 0;
+        const countBadgeHtml = count === 0
+          ? `<span class="px-2.5 py-0.5 rounded font-mono font-bold inline-flex items-center gap-1.5 badge-count-zero shadow-sm" title="Počet stažených výpisů: 0 (žádný výpis nenalezen)"><i class="fa-solid fa-triangle-exclamation text-[11px] text-red-400"></i> 0</span>`
+          : `<span class="px-2.5 py-0.5 rounded font-mono font-bold inline-flex items-center gap-1.5 badge-count-positive" title="Počet stažených výpisů: ${count}"><i class="fa-solid fa-file-invoice text-[11px] text-blue-400"></i> ${count}</span>`;
+
+        return `
         <tr class="hover:bg-gray-800/40 transition">
           <td class="p-3 font-mono font-medium text-blue-400">
             <div class="flex items-center gap-2">
@@ -2678,7 +2727,7 @@
           <td class="p-3 font-mono text-xs">${item.bankAccount || '-'} <span class="text-gray-500">(${item.bankName || ''})</span></td>
           <td class="p-3 text-xs text-gray-400">${item.date ? new Date(item.date).toLocaleString('cs-CZ') : '-'}</td>
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
-          <td class="p-3 text-center"><span class="px-2 py-0.5 bg-gray-800 text-blue-400 rounded font-mono font-bold">${item.numberOfStatements ?? 0}</span></td>
+          <td class="p-3 text-center">${countBadgeHtml}</td>
           <td class="p-3 font-mono text-xs font-medium">
             ${item.requestReferenceId ? `
               <button onclick="linkToRef('${item.requestReferenceId}')" title="Vyhledat a propojit s Bankovním/ERP záznamem" class="px-2 py-1 btn-ref-id rounded flex items-center gap-1.5 transition">
@@ -2694,7 +2743,8 @@
             <button onclick="showDetailModal('Detail Výpisu', ${JSON.stringify(item).replace(/"/g, '&quot;')})" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
           </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function renderBankMessagesGrid(items) {
