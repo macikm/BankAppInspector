@@ -2271,9 +2271,14 @@
     async function fetchStatementsData() {
       const page = paginationState.stmt.page;
       const pageSize = paginationState.stmt.pageSize;
-      let queryParams = `?page=${page}&pageSize=${pageSize}`;
+      const offset = (page - 1) * pageSize;
+      const limit = pageSize;
+      let queryParams = `?Offset=${offset}&Limit=${limit}&page=${page}&pageSize=${pageSize}`;
       if (dateFilter.from) queryParams += `&from=${encodeURIComponent(dateFilter.from)}`;
-      if (dateFilter.to) queryParams += `&to=${encodeURIComponent(dateFilter.to)}`;
+      if (dateFilter.to) {
+        const toVal = dateFilter.to.includes('T') ? dateFilter.to : `${dateFilter.to}T23:59:59`;
+        queryParams += `&to=${encodeURIComponent(toVal)}`;
+      }
 
       try {
         const maintStmt = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/StatementMessage${queryParams}`, 'GET');
@@ -2289,9 +2294,14 @@
     async function fetchBankData() {
       const page = paginationState.bank.page;
       const pageSize = paginationState.bank.pageSize;
-      let queryParams = `?page=${page}&pageSize=${pageSize}`;
+      const offset = (page - 1) * pageSize;
+      const limit = pageSize;
+      let queryParams = `?Offset=${offset}&Limit=${limit}&page=${page}&pageSize=${pageSize}`;
       if (dateFilter.from) queryParams += `&from=${encodeURIComponent(dateFilter.from)}`;
-      if (dateFilter.to) queryParams += `&to=${encodeURIComponent(dateFilter.to)}`;
+      if (dateFilter.to) {
+        const toVal = dateFilter.to.includes('T') ? dateFilter.to : `${dateFilter.to}T23:59:59`;
+        queryParams += `&to=${encodeURIComponent(toVal)}`;
+      }
 
       try {
         const maintBank = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/BankMessage${queryParams}`, 'GET');
@@ -2314,9 +2324,14 @@
     async function fetchErpData() {
       const page = paginationState.erp.page;
       const pageSize = paginationState.erp.pageSize;
-      let queryParams = `?page=${page}&pageSize=${pageSize}`;
+      const offset = (page - 1) * pageSize;
+      const limit = pageSize;
+      let queryParams = `?Offset=${offset}&Limit=${limit}&page=${page}&pageSize=${pageSize}`;
       if (dateFilter.from) queryParams += `&from=${encodeURIComponent(dateFilter.from)}`;
-      if (dateFilter.to) queryParams += `&to=${encodeURIComponent(dateFilter.to)}`;
+      if (dateFilter.to) {
+        const toVal = dateFilter.to.includes('T') ? dateFilter.to : `${dateFilter.to}T23:59:59`;
+        queryParams += `&to=${encodeURIComponent(toVal)}`;
+      }
 
       try {
         const maintErp = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/ErpMessage${queryParams}`, 'GET');

@@ -32,7 +32,7 @@ Všechny níže uvedené API požadavky (mimo přihlášení) posílají tyto st
 
 ## 📦 2. ERP Požadavky & Zprávy (ERP Messages)
 
-### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/ErpMessage?page={page}&pageSize={pageSize}`**
+### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/ErpMessage?Offset={offset}&Limit={limit}`**
 * **Metoda:** `GET`
 * **Účel:** Načtení přehledu ERP zpráv přes Maintenance API (obchází HTTP 403 u nevlastnických účtů).
 
@@ -40,7 +40,7 @@ Všechny níže uvedené API požadavky (mimo přihlášení) posílají tyto st
 
 ## 📄 3. Žádosti o Výpisy (Statement Messages)
 
-### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/StatementMessage?page={page}&pageSize={pageSize}`**
+### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/StatementMessage?Offset={offset}&Limit={limit}`**
 * **Metoda:** `GET`
 * **Účel:** Načtení výpisů výhradně přes Maintenance API.
 
@@ -48,7 +48,7 @@ Všechny níže uvedené API požadavky (mimo přihlášení) posílají tyto st
 
 ## 🏦 4. Zprávy & Komunikace s Bankou (Bank Messages)
 
-### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/BankMessage?page={page}&pageSize={pageSize}`**
+### **`GET /api/v1/Maintenance/GetMessages/{tenantId}/BankMessage?Offset={offset}&Limit={limit}`**
 * **Metoda:** `GET`
 * **Účel:** Načtení zpráv a odpovědí banky výhradně přes Maintenance API.
 
