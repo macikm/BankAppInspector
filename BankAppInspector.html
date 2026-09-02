@@ -1165,10 +1165,41 @@
       tenantId: localStorage.getItem('bankapp_tenant_id') || 'ICEnergo-498e5a27-3e95-4ff3-88fd-357e0a9450aa',
       clientId: 'plaza-pass',
       clientSecret: '',
-      username: '',
+      username: localStorage.getItem('bankapp_username') || '',
       password: '',
       accessToken: localStorage.getItem('bankapp_access_token') || ''
     };
+
+    function isAsolEuAllowed() {
+      // 1. Direct username check
+      if (config.username && config.username.trim().toLowerCase() === 'martin.macko@assecosol.com') {
+        return true;
+      }
+      // 2. JWT token claims check (sub, email, unique_name, preferred_username, name, upn)
+      if (config.accessToken) {
+        try {
+          const parts = config.accessToken.split('.');
+          if (parts.length >= 2) {
+            const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+            const payload = JSON.parse(jsonPayload);
+            const userClaim = payload.email || payload.sub || payload.unique_name || payload.preferred_username || payload.name || payload.user_name || payload.upn || '';
+            if (String(userClaim).trim().toLowerCase() === 'martin.macko@assecosol.com') {
+              return true;
+            }
+          }
+        } catch (e) {}
+      }
+      return false;
+    }
+
+    function isTenantHidden(tenantId) {
+      if (!tenantId) return false;
+      if (String(tenantId).trim().toUpperCase() === 'ASOLEU') {
+        return !isAsolEuAllowed();
+      }
+      return false;
+    }
 
     let dateFilter = { preset: 'ALL', from: null, to: null };
 
@@ -1619,7 +1650,7 @@
         const parsed = JSON.parse(cachedStr);
         if (Array.isArray(parsed)) {
           for (const t of parsed) {
-            if (t && t.id) knownTenantsMap.set(t.id, t);
+            if (t && t.id && !isTenantHidden(t.id)) knownTenantsMap.set(t.id, t);
           }
         }
       }
@@ -1660,7 +1691,7 @@
 
             for (const t of items) {
               const tid = t.id || t.tenantId;
-              if (tid) {
+              if (tid && !isTenantHidden(tid)) {
                 const name = t.name || t.tenantName || tid;
                 fetchedMap.set(tid, { id: tid, name: name });
               }
@@ -1697,7 +1728,14 @@
       if (isFetchingTenants) return;
       isFetchingTenants = true;
 
-      if (config.tenantId && !knownTenantsMap.has(config.tenantId)) {
+      // Ensure ASOLEU is present in knownTenantsMap if user is authorized
+      if (isAsolEuAllowed()) {
+        if (!knownTenantsMap.has('ASOLEU')) knownTenantsMap.set('ASOLEU', { id: 'ASOLEU', name: 'Asseco Solutions' });
+      } else {
+        knownTenantsMap.delete('ASOLEU');
+      }
+
+      if (config.tenantId && !isTenantHidden(config.tenantId) && !knownTenantsMap.has(config.tenantId)) {
         knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
       }
 
@@ -1708,9 +1746,9 @@
         const idpTenants = await fetchUserTenantsFromIdp();
         if (idpTenants && idpTenants.length > 0) {
           for (const t of idpTenants) {
-            if (t && t.id) knownTenantsMap.set(t.id, t);
+            if (t && t.id && !isTenantHidden(t.id)) knownTenantsMap.set(t.id, t);
           }
-          const toCache = Array.from(knownTenantsMap.values());
+          const toCache = Array.from(knownTenantsMap.values()).filter(t => t && t.id && !isTenantHidden(t.id));
           localStorage.setItem('bankapp_cached_tenants', JSON.stringify(toCache));
         }
       } catch (e) {
@@ -1719,7 +1757,7 @@
         isFetchingTenants = false;
       }
 
-      if (config.tenantId && !knownTenantsMap.has(config.tenantId)) {
+      if (config.tenantId && !isTenantHidden(config.tenantId) && !knownTenantsMap.has(config.tenantId)) {
         knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
       }
 
@@ -1745,8 +1783,8 @@
       const container = document.getElementById('tenantOptionsList');
       if (!container) return;
 
-      // Sort tenants ALPHABETICALLY (A-Z) by name or id
-      const tenantsArray = Array.from(knownTenantsMap.values());
+      // Sort tenants ALPHABETICALLY (A-Z) by name or id, excluding unauthorized tenants
+      const tenantsArray = Array.from(knownTenantsMap.values()).filter(t => t && t.id && !isTenantHidden(t.id));
       tenantsArray.sort((a, b) => {
         const nameA = (a.name || a.id).toLowerCase();
         const nameB = (b.name || b.id).toLowerCase();
@@ -1853,8 +1891,15 @@
 
     function selectTenant(tenantId) {
       closeTenantDropdown();
-      if (tenantId && tenantId.trim() !== config.tenantId) {
-        onTenantTopChanged(tenantId.trim());
+      if (!tenantId) return;
+      const cleanId = tenantId.trim();
+      if (isTenantHidden(cleanId)) {
+        showToast(`Tenant ${cleanId} není pro váš účet povolen.`, 'error', 3500);
+        logConsole(`Přístup k tenantu ${cleanId} zamítnut pro uživatele ${config.username || 'nepřihlášen'}`);
+        return;
+      }
+      if (cleanId !== config.tenantId) {
+        onTenantTopChanged(cleanId);
       }
     }
 
@@ -1876,6 +1921,11 @@
       const inp = document.getElementById('tenantManualInput');
       if (inp && inp.value.trim()) {
         const tid = inp.value.trim();
+        if (isTenantHidden(tid)) {
+          showToast(`Tenant ${tid} není pro váš účet povolen.`, 'error', 3500);
+          logConsole(`Ruční zadání tenanta ${tid} zamítnuto pro uživatele ${config.username || 'nepřihlášen'}`);
+          return;
+        }
         knownTenantsMap.set(tid, { id: tid, name: tid });
         selectTenant(tid);
       }
@@ -1891,6 +1941,11 @@
         const label = document.getElementById('themeText');
         if (icon) icon.className = 'fa-solid fa-sun text-amber-500';
         if (label) label.textContent = 'Světlý režim';
+      }
+
+      if (isTenantHidden(config.tenantId)) {
+        config.tenantId = 'ICEnergo-498e5a27-3e95-4ff3-88fd-357e0a9450aa';
+        localStorage.setItem('bankapp_tenant_id', config.tenantId);
       }
 
       updateTenantTriggerLabel();
@@ -1956,7 +2011,14 @@
     }
 
     async function onTenantTopChanged(newVal) {
-      config.tenantId = newVal.trim();
+      const cleanVal = newVal.trim();
+      if (isTenantHidden(cleanVal)) {
+        showToast(`Tenant ${cleanVal} není pro váš účet povolen.`, 'error', 3500);
+        logConsole(`Přístup k tenantu ${cleanVal} zamítnut pro uživatele ${config.username || 'nepřihlášen'}`);
+        return;
+      }
+
+      config.tenantId = cleanVal;
       localStorage.setItem('bankapp_tenant_id', config.tenantId);
       logConsole(`Tenant ID upraven na: ${config.tenantId}`);
 
@@ -1996,6 +2058,10 @@
 
     function toggleConfigModal() {
       const modal = document.getElementById('configModal');
+      const uInp = document.getElementById('inputUsername');
+      if (uInp && !uInp.value && config.username) {
+        uInp.value = config.username;
+      }
       modal.classList.toggle('hidden');
     }
 
@@ -2218,6 +2284,10 @@
       config.password = document.getElementById('inputPassword').value;
       config.accessToken = document.getElementById('inputToken').value.trim();
 
+      if (config.username) {
+        localStorage.setItem('bankapp_username', config.username);
+      }
+
       document.getElementById('lblEnv').textContent = config.baseUrl;
 
       // If user directly entered token
@@ -2225,6 +2295,7 @@
         localStorage.setItem('bankapp_access_token', config.accessToken);
         updateStatusUI(true, "Použit ruční Token");
         toggleConfigModal();
+        await fetchAndPopulateTenants();
         await refreshData();
         return;
       }
@@ -2233,6 +2304,7 @@
       try {
         await obtainOAuthToken(false);
         toggleConfigModal();
+        await fetchAndPopulateTenants();
         await refreshData();
       } catch (err) {
         logConsole("Chyba při autentikaci", err.message);
