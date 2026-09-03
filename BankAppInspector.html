@@ -679,7 +679,7 @@
       </div>
     </div>
 
-    <!-- Right Section: Theme Switcher, OAuth Status & Auth Modal Trigger -->
+    <!-- Right Section: Theme Switcher, OAuth Status, Logout & Auth Modal Trigger -->
     <div class="flex flex-wrap items-center gap-3 text-sm">
       <!-- Theme Switcher Button (Before OAuth badge) -->
       <button onclick="toggleTheme()" title="Přepnout Tmavý / Světlý režim"
@@ -694,10 +694,17 @@
         <span id="statusText">Nepřipojeno</span>
       </div>
 
-      <button onclick="toggleConfigModal()"
+      <!-- Logout Button (visible only when authenticated) -->
+      <button id="btnLogout" onclick="handleLogout()" title="Odhlásit uživatele"
+        class="hidden px-3 py-1.5 bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/80 rounded-xl text-xs font-medium flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-right-from-bracket text-red-400"></i>
+        <span class="hidden sm:inline">Odhlásit</span>
+      </button>
+
+      <button id="btnAuthTrigger" onclick="toggleConfigModal()"
         class="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-medium rounded-lg text-sm transition-all duration-200 shadow-md shadow-teal-600/20 flex items-center gap-2">
-        <i class="fa-solid fa-sliders"></i>
-        <span>Přihlášení / Auth</span>
+        <i class="fa-solid fa-sliders" id="btnAuthIcon"></i>
+        <span id="btnAuthLabel">Přihlášení / Auth</span>
       </button>
     </div>
   </header>
@@ -1096,13 +1103,19 @@
         <div id="modalError"
           class="hidden p-3 bg-red-950/80 border border-red-800 text-red-300 rounded-lg text-xs font-mono"></div>
 
-        <div class="flex items-center justify-end space-x-3 pt-2">
-          <button type="button" onclick="toggleConfigModal()"
-            class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg">Zrušit</button>
-          <button type="submit"
-            class="px-5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold rounded-lg shadow-lg shadow-teal-600/30 flex items-center gap-2">
-            <i class="fa-solid fa-plug"></i> Připojit & Načíst
+        <div class="flex items-center justify-between pt-2">
+          <button type="button" id="modalBtnLogout" onclick="handleLogout(); toggleConfigModal();"
+            class="hidden px-3.5 py-2 bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/80 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-right-from-bracket text-red-400"></i> Odhlásit
           </button>
+          <div class="flex items-center space-x-3 ml-auto">
+            <button type="button" onclick="toggleConfigModal()"
+              class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg">Zavřít</button>
+            <button type="submit"
+              class="px-5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold rounded-lg shadow-lg shadow-teal-600/30 flex items-center gap-2">
+              <i class="fa-solid fa-plug"></i> Přihlásit & Načíst
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -1557,22 +1570,152 @@
       }
     }
 
-    // OAuth Token Helper Functions
-    function isTokenExpired(token) {
-      if (!token) return true;
+    // OAuth Token Helper Functions & Session Management
+    function getTokenExpInfo(token) {
+      if (!token) return { expired: true, remainingSec: 0, expDate: null };
       try {
-        const base64Url = token.split('.')[1];
-        if (!base64Url) return false;
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-        const payload = JSON.parse(jsonPayload);
-        if (payload && payload.exp) {
-          return (payload.exp * 1000) < (Date.now() + 30000); // 30 second buffer
+        const parts = token.split('.');
+        if (parts.length >= 2) {
+          const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+          const payload = JSON.parse(jsonPayload);
+          if (payload && payload.exp) {
+            const expMs = payload.exp * 1000;
+            const remainingSec = Math.floor((expMs - Date.now()) / 1000);
+            return {
+              expired: remainingSec <= 0,
+              remainingSec: Math.max(0, remainingSec),
+              expDate: new Date(expMs)
+            };
+          }
         }
       } catch (e) {
         // Fallback if not standard JWT format
       }
-      return false;
+      return { expired: false, remainingSec: 3600, expDate: null };
+    }
+
+    function isTokenExpired(token) {
+      if (!token) return true;
+      const expInfo = getTokenExpInfo(token);
+      // Buffer of 30 seconds
+      return expInfo.remainingSec <= 30;
+    }
+
+    function isAuthenticated() {
+      return Boolean(config.accessToken && !isTokenExpired(config.accessToken));
+    }
+
+    function getAuthStatusText() {
+      if (!isAuthenticated()) return "Nepřihlášeno";
+      const expInfo = getTokenExpInfo(config.accessToken);
+      const user = config.username ? config.username.split('@')[0] : 'Přihlášeno';
+      if (expInfo.remainingSec > 0) {
+        const mins = Math.ceil(expInfo.remainingSec / 60);
+        return `${user} (${mins} min)`;
+      }
+      return user;
+    }
+
+    let tokenMonitorInterval = null;
+
+    function startTokenMonitor() {
+      if (tokenMonitorInterval) clearInterval(tokenMonitorInterval);
+      tokenMonitorInterval = setInterval(async () => {
+        if (!config.accessToken) {
+          updateStatusUI(false, "Nepřihlášeno");
+          return;
+        }
+
+        const expInfo = getTokenExpInfo(config.accessToken);
+
+        // If token expires in less than 3 minutes (180s) and we have credentials in memory
+        if (expInfo.remainingSec > 0 && expInfo.remainingSec <= 180) {
+          if (config.username && config.password) {
+            try {
+              logConsole(`Automatická obnova tokenu na pozadí (vyprší za ${expInfo.remainingSec}s)...`);
+              await obtainOAuthToken(true);
+              logConsole("OAuth token byl úspěšně automaticky obnoven na pozadí.");
+            } catch (e) {
+              logConsole("Automatická obnova tokenu selhala:", e.message);
+            }
+          }
+        } else if (expInfo.expired) {
+          handleSessionExpired();
+          return;
+        }
+
+        updateStatusUI(isAuthenticated(), getAuthStatusText());
+      }, 30000);
+    }
+
+    function handleLogout() {
+      config.accessToken = '';
+      config.password = '';
+      localStorage.removeItem('bankapp_access_token');
+      rawErpMessages = [];
+      rawStatements = [];
+      rawBankMessages = [];
+      rawPayments = [];
+      statementMismatchCache = {};
+
+      updateStatusUI(false, "Odhlášeno");
+      renderEmptyLockedStateAll();
+      updateTenantTriggerLabel();
+      showToast("Byli jste úspěšně odhlášeni.", "success", 3000);
+    }
+
+    function handleSessionExpired() {
+      config.accessToken = '';
+      localStorage.removeItem('bankapp_access_token');
+      rawErpMessages = [];
+      rawStatements = [];
+      rawBankMessages = [];
+      rawPayments = [];
+
+      updateStatusUI(false, "Relace vypršela");
+      renderEmptyLockedStateAll();
+      updateTenantTriggerLabel();
+      showToast("Vaše přihlášení vypršelo. Prosím přihlaste se znovu.", "error", 5000);
+      toggleConfigModal();
+    }
+
+    function renderEmptyLockedStateAll() {
+      const lockedHtml = (colSpan, title) => `
+        <tr>
+          <td colspan="${colSpan}" class="p-12 text-center text-gray-400 bg-gray-900/20">
+            <div class="flex flex-col items-center justify-center gap-3 py-6">
+              <div class="w-14 h-14 rounded-2xl bg-gray-900 border border-gray-700 flex items-center justify-center text-teal-400 text-2xl shadow-xl">
+                <i class="fa-solid fa-lock"></i>
+              </div>
+              <div class="text-base font-bold text-gray-100">Vyžaduje přihlášení</div>
+              <div class="text-xs text-gray-400 max-w-md">Pro načtení a zobrazení dat (${title}) se prosím nejprve přihlaste platným uživatelským účtem nebo Bearer tokenem.</div>
+              <button onclick="toggleConfigModal()" class="mt-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold rounded-xl text-xs shadow-lg shadow-teal-600/30 flex items-center gap-2 transition">
+                <i class="fa-solid fa-key"></i> Otevřít přihlášení
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+
+      const tbodyErp = document.getElementById('gridErpBody');
+      const tbodyStmt = document.getElementById('gridStatementsBody');
+      const tbodyBank = document.getElementById('gridBankMessagesBody');
+      const tbodyPay = document.getElementById('gridPaymentsBody');
+
+      if (tbodyErp) tbodyErp.innerHTML = lockedHtml(8, 'ERP Požadavky');
+      if (tbodyStmt) tbodyStmt.innerHTML = lockedHtml(8, 'Výpisy');
+      if (tbodyBank) tbodyBank.innerHTML = lockedHtml(8, 'Bankovní Zprávy');
+      if (tbodyPay) tbodyPay.innerHTML = lockedHtml(7, 'Dávkové Příkazy');
+
+      const cntErp = document.getElementById('cntErp');
+      const cntStmt = document.getElementById('cntStatements');
+      const cntBank = document.getElementById('cntBank');
+      const cntPay = document.getElementById('cntPayments');
+      if (cntErp) cntErp.textContent = '0';
+      if (cntStmt) cntStmt.textContent = '0';
+      if (cntBank) cntBank.textContent = '0';
+      if (cntPay) cntPay.textContent = '0';
     }
 
     async function obtainOAuthToken(silent = false) {
@@ -1618,7 +1761,7 @@
       const tokenData = await tokenRes.json();
       config.accessToken = tokenData.access_token;
       localStorage.setItem('bankapp_access_token', config.accessToken);
-      updateStatusUI(true, "Přihlášeno přes OAuth");
+      updateStatusUI(true, getAuthStatusText());
       return config.accessToken;
     }
 
@@ -1861,6 +2004,11 @@
 
     function toggleTenantDropdown(e) {
       if (e) e.stopPropagation();
+      if (!isAuthenticated()) {
+        showToast("Pro výběr tenanta se nejprve přihlaste.", "error", 3000);
+        toggleConfigModal();
+        return;
+      }
       const panel = document.getElementById('tenantDropdownPanel');
       const chevron = document.getElementById('tenantDropdownChevron');
       if (!panel) return;
@@ -1949,19 +2097,21 @@
       }
 
       updateTenantTriggerLabel();
+      startTokenMonitor();
 
-      // Ensure valid OAuth token is obtained BEFORE triggering API data calls!
-      try {
-        await ensureValidToken();
-        updateStatusUI(true, "Připojeno (OAuth Token)");
-      } catch (e) {
-        updateStatusUI(false, "Vyžaduje přihlášení");
+      // Check if valid token exists on startup
+      if (isAuthenticated()) {
+        updateStatusUI(true, getAuthStatusText());
+        await Promise.allSettled([
+          fetchAndPopulateTenants(),
+          refreshData()
+        ]);
+      } else {
+        updateStatusUI(false, "Nepřihlášeno");
+        renderEmptyLockedStateAll();
+        // Automatically show config/login modal if not authenticated
+        toggleConfigModal();
       }
-
-      await Promise.allSettled([
-        fetchAndPopulateTenants(),
-        refreshData()
-      ]);
     });
 
     let toastHideTimeout = null;
@@ -2264,12 +2414,36 @@
     function updateStatusUI(connected, text, error = null) {
       const statusDot = document.getElementById('statusDot');
       const statusText = document.getElementById('statusText');
-      if (connected) {
-        statusDot.className = "w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse";
-        statusText.textContent = text || "Připojeno";
+      const btnLogout = document.getElementById('btnLogout');
+      const modalBtnLogout = document.getElementById('modalBtnLogout');
+      const btnAuthLabel = document.getElementById('btnAuthLabel');
+      const btnAuthIcon = document.getElementById('btnAuthIcon');
+      const tenantTrigger = document.getElementById('tenantDropdownTrigger');
+
+      const authed = isAuthenticated();
+
+      if (authed) {
+        if (statusDot) statusDot.className = "w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse";
+        if (statusText) statusText.textContent = text || getAuthStatusText();
+        if (btnLogout) btnLogout.classList.remove('hidden');
+        if (modalBtnLogout) modalBtnLogout.classList.remove('hidden');
+        if (btnAuthLabel) btnAuthLabel.textContent = "Nastavení";
+        if (btnAuthIcon) btnAuthIcon.className = "fa-solid fa-sliders";
+        if (tenantTrigger) {
+          tenantTrigger.classList.remove('opacity-50', 'cursor-not-allowed');
+          tenantTrigger.title = "Změnit tenanta";
+        }
       } else {
-        statusDot.className = "w-2.5 h-2.5 rounded-full bg-red-400";
-        statusText.textContent = text || "Chyba připojení";
+        if (statusDot) statusDot.className = "w-2.5 h-2.5 rounded-full bg-red-400";
+        if (statusText) statusText.textContent = text || "Nepřihlášeno";
+        if (btnLogout) btnLogout.classList.add('hidden');
+        if (modalBtnLogout) modalBtnLogout.classList.add('hidden');
+        if (btnAuthLabel) btnAuthLabel.textContent = "Přihlášení / Auth";
+        if (btnAuthIcon) btnAuthIcon.className = "fa-solid fa-key";
+        if (tenantTrigger) {
+          tenantTrigger.classList.add('opacity-50', 'cursor-not-allowed');
+          tenantTrigger.title = "Pro výběr tenanta se nejprve přihlaste";
+        }
       }
     }
 
@@ -2321,7 +2495,11 @@
         try {
           await ensureValidToken();
         } catch (e) {
-          // Proceed with request if no credentials available
+          if (!silent) {
+            logConsole(`Chyba autentikace před voláním ${endpoint}:`, e.message);
+          }
+          handleSessionExpired();
+          throw e;
         }
       }
 
@@ -2358,7 +2536,7 @@
           await obtainOAuthToken(true);
           return await fetchApi(endpoint, method, body, silent, true);
         } catch (refreshErr) {
-          // If auto re-auth fails, fall through to error handling
+          handleSessionExpired();
         }
       }
 
@@ -2366,6 +2544,9 @@
         const errText = await res.text();
         if (!silent) {
           logConsole(`Chyba API (${res.status}) z ${endpoint}:`, errText);
+        }
+        if (res.status === 401) {
+          handleSessionExpired();
         }
         throw new Error(`HTTP ${res.status}: ${errText}`);
       }
@@ -2474,6 +2655,13 @@
     }
 
     async function refreshData() {
+      if (!isAuthenticated()) {
+        renderEmptyLockedStateAll();
+        updateStatusUI(false, "Nepřihlášeno");
+        showToast("Pro načtení dat se prosím nejprve přihlaste.", "error", 3000);
+        toggleConfigModal();
+        return;
+      }
       if (!config.tenantId) return;
 
       const icon = document.getElementById('refreshIcon');
