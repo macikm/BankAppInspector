@@ -739,6 +739,10 @@
       </div>
 
       <div class="flex items-center gap-2">
+        <button onclick="clearAllFilters()" title="Vymazat všechny textové filtry, stavy i období"
+          class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-amber-300 rounded-md border border-amber-500/30 flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-filter-circle-xmark text-amber-400"></i> Zrušit filtry
+        </button>
         <button onclick="refreshData()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-md border border-gray-700 flex items-center gap-1.5 transition">
           <i class="fa-solid fa-arrows-rotate text-blue-400" id="refreshIcon"></i> Obnovit Všechna Data
         </button>
@@ -1128,16 +1132,29 @@
       class="glass-panel rounded-2xl p-6 w-[92vw] max-w-6xl shadow-2xl border border-gray-700 flex flex-col max-h-[90vh] space-y-3">
 
       <!-- Modal Header -->
-      <div class="flex items-center justify-between pb-1">
-        <h3 class="text-lg font-bold text-white flex items-center gap-2" id="detailModalTitle">
+      <div class="flex items-center justify-between pb-1 flex-wrap gap-2">
+        <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2 truncate max-w-[55vw]" id="detailModalTitle">
           <i class="fa-solid fa-code text-blue-400"></i> Detail Payload / Zprávy
         </h3>
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+          <!-- Record Navigator Controls -->
+          <div id="modalNavControls" class="flex items-center gap-1 bg-gray-900 px-2 py-1 rounded-lg border border-gray-700 text-xs shadow-inner">
+            <button id="modalPrevBtn" onclick="navigateModalItem(-1)" title="Předchozí záznam (Klávesa: Šipka vlevo / PgUp)"
+              class="px-2 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-gray-200 rounded text-xs flex items-center gap-1 transition">
+              <i class="fa-solid fa-chevron-left text-[10px]"></i> <span class="hidden sm:inline">Předchozí</span>
+            </button>
+            <span id="modalItemPosLabel" class="font-mono text-xs text-amber-400 font-semibold px-2 min-w-[55px] text-center">1 / 1</span>
+            <button id="modalNextBtn" onclick="navigateModalItem(1)" title="Další záznam (Klávesa: Šipka vpravo / PgDown)"
+              class="px-2 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-gray-200 rounded text-xs flex items-center gap-1 transition">
+              <span class="hidden sm:inline">Další</span> <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            </button>
+          </div>
+
           <button onclick="copyModalContent()"
             class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-lg border border-gray-700 flex items-center gap-1.5 transition">
             <i class="fa-solid fa-copy text-blue-400"></i> Kopírovat JSON
           </button>
-          <button onclick="closeDetailModal()" class="text-gray-400 hover:text-white p-1"><i
+          <button onclick="closeDetailModal()" class="text-gray-400 hover:text-white p-1" title="Zavřít (ESC)"><i
               class="fa-solid fa-xmark text-lg"></i></button>
         </div>
       </div>
@@ -1152,10 +1169,12 @@
 
       <!-- Modal Footer -->
       <div class="flex justify-between items-center text-xs text-gray-400 pt-1">
-        <span id="copyNotice" class="text-green-400 hidden"><i class="fa-solid fa-check"></i> Zkopírováno do
-          schránky!</span>
+        <div class="flex items-center gap-3">
+          <span id="copyNotice" class="text-green-400 hidden"><i class="fa-solid fa-check"></i> Zkopírováno do schránky!</span>
+          <span class="text-gray-500 text-[11px] hidden sm:inline"><i class="fa-regular fa-keyboard mr-1"></i> Tip: Mezi záznamy můžete listovat šipkami ◀ / ▶ na klávesnici</span>
+        </div>
         <button onclick="closeDetailModal()"
-          class="ml-auto px-5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium rounded-lg text-sm">Zavřít</button>
+          class="ml-auto px-5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium rounded-lg text-sm transition">Zavřít</button>
       </div>
 
     </div>
@@ -2219,8 +2238,11 @@
       document.getElementById('detailModal').classList.add('hidden');
     }
 
-    // Keydown listener for Escape key to close open modals or tenant dropdown
+    // Keydown listener for Escape and Arrow navigation in modal
     document.addEventListener('keydown', function (e) {
+      const detailModal = document.getElementById('detailModal');
+      const isDetailOpen = detailModal && !detailModal.classList.contains('hidden');
+
       if (e.key === 'Escape' || e.keyCode === 27) {
         const tenantPanel = document.getElementById('tenantDropdownPanel');
         if (tenantPanel && !tenantPanel.classList.contains('hidden')) {
@@ -2229,14 +2251,21 @@
           return;
         }
 
-        const detailModal = document.getElementById('detailModal');
         const configModal = document.getElementById('configModal');
 
-        if (detailModal && !detailModal.classList.contains('hidden')) {
+        if (isDetailOpen) {
           closeDetailModal();
           e.preventDefault();
         } else if (configModal && !configModal.classList.contains('hidden')) {
           configModal.classList.add('hidden');
+          e.preventDefault();
+        }
+      } else if (isDetailOpen) {
+        if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+          navigateModalItem(-1);
+          e.preventDefault();
+        } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+          navigateModalItem(1);
           e.preventDefault();
         }
       }
@@ -2688,6 +2717,155 @@
       }
     }
 
+    // Filtered items state for pagination, grids, and modal navigation
+    let currentFilteredErp = [];
+    let currentFilteredStatements = [];
+    let currentFilteredBank = [];
+    let currentFilteredPayments = [];
+
+    // Modal navigation context
+    let modalNavContext = {
+      listType: '',
+      items: [],
+      currentIndex: -1,
+      actionType: ''
+    };
+
+    function getFilteredListByType(listType) {
+      if (listType === 'erp') return currentFilteredErp;
+      if (listType === 'statements') return currentFilteredStatements;
+      if (listType === 'bank') return currentFilteredBank;
+      if (listType === 'payments') return currentFilteredPayments;
+      return [];
+    }
+
+    async function openItemModal(listType, index, actionType) {
+      const list = getFilteredListByType(listType);
+      modalNavContext = {
+        listType: listType,
+        items: list || [],
+        currentIndex: index,
+        actionType: actionType
+      };
+
+      await loadModalItem(index);
+    }
+
+    async function navigateModalItem(delta) {
+      if (!modalNavContext.items || modalNavContext.items.length === 0) return;
+      const targetIndex = modalNavContext.currentIndex + delta;
+      if (targetIndex < 0 || targetIndex >= modalNavContext.items.length) return;
+      await loadModalItem(targetIndex);
+    }
+
+    async function loadModalItem(index) {
+      if (!modalNavContext.items || index < 0 || index >= modalNavContext.items.length) return;
+      modalNavContext.currentIndex = index;
+
+      const item = modalNavContext.items[index];
+      const total = modalNavContext.items.length;
+
+      // Update Nav Buttons UI
+      const prevBtn = document.getElementById('modalPrevBtn');
+      const nextBtn = document.getElementById('modalNextBtn');
+      const posLabel = document.getElementById('modalItemPosLabel');
+      const navControls = document.getElementById('modalNavControls');
+
+      if (navControls) navControls.classList.remove('hidden');
+      if (prevBtn) prevBtn.disabled = (index <= 0);
+      if (nextBtn) nextBtn.disabled = (index >= total - 1);
+      if (posLabel) posLabel.textContent = `${index + 1} / ${total}`;
+
+      const action = modalNavContext.actionType;
+      const itemCode = item.code || item.requestReferenceId || item.id || `#${index + 1}`;
+
+      if (action === 'request') {
+        const reqId = item.requestReferenceId || item.code;
+        if (!reqId) {
+          showDetailModal(`Požadavek (${itemCode})`, { error: "Záznam neobsahuje kód ani RequestReferenceId." });
+          return;
+        }
+        await fetchReqDataFromDS(reqId, `Detail Požadavku (${itemCode})`);
+      } else if (action === 'response') {
+        const fileId = item.responseJsonId;
+        if (!fileId) {
+          showDetailModal(`Odpověď Banky (${itemCode})`, { message: "Tento záznam nemá evidováno žádné responseJsonId." });
+          return;
+        }
+        await fetchMaintenanceFile(fileId, `Detail Odpovědi Banky (${itemCode})`);
+      } else if (action === 'statement') {
+        const fileId = item.statementJsonFileReferenceId;
+        if (!fileId) {
+          showDetailModal(`Výpis (${itemCode})`, { message: "Tento záznam nemá evidováno žádné statementJsonFileReferenceId." });
+          return;
+        }
+        await fetchMaintenanceFile(fileId, `Detail Staženého Výpisu (${itemCode})`);
+      } else {
+        // 'info' / 'detail'
+        const typeLabel = modalNavContext.listType === 'erp' ? 'ERP Zprávy'
+          : modalNavContext.listType === 'statements' ? 'Výpisu'
+          : modalNavContext.listType === 'bank' ? 'Bank Zprávy'
+          : 'Platby';
+        showDetailModal(`Detail ${typeLabel} (${itemCode})`, item);
+      }
+    }
+
+    function clearAllFilters() {
+      // 1. Clear text search inputs
+      const searchErp = document.getElementById('searchErp');
+      const searchStmt = document.getElementById('searchStmt');
+      const searchBank = document.getElementById('searchBank');
+      const searchPayments = document.getElementById('searchPayments');
+      if (searchErp) searchErp.value = '';
+      if (searchStmt) searchStmt.value = '';
+      if (searchBank) searchBank.value = '';
+      if (searchPayments) searchPayments.value = '';
+
+      // Clear search button X icons
+      const clearErp = document.getElementById('clearErp');
+      const clearStmt = document.getElementById('clearStmt');
+      const clearBank = document.getElementById('clearBank');
+      const clearPayments = document.getElementById('clearPayments');
+      if (clearErp) clearErp.classList.add('hidden');
+      if (clearStmt) clearStmt.classList.add('hidden');
+      if (clearBank) clearBank.classList.add('hidden');
+      if (clearPayments) clearPayments.classList.add('hidden');
+
+      // 2. Reset dropdown filters
+      const filterTypeErp = document.getElementById('filterTypeErp');
+      const filterStateErp = document.getElementById('filterStateErp');
+      const filterStateStmt = document.getElementById('filterStateStmt');
+      const filterCountStmt = document.getElementById('filterCountStmt');
+      const filterStateBank = document.getElementById('filterStateBank');
+      if (filterTypeErp) filterTypeErp.value = 'ALL';
+      if (filterStateErp) filterStateErp.value = 'ALL';
+      if (filterStateStmt) filterStateStmt.value = 'ALL';
+      if (filterCountStmt) filterCountStmt.value = 'ALL';
+      if (filterStateBank) filterStateBank.value = 'ALL';
+
+      // 3. Reset date filter preset to ALL
+      const datePreset = document.getElementById('datePresetSelect');
+      if (datePreset) datePreset.value = 'ALL';
+      const customDateContainer = document.getElementById('customDateRange');
+      if (customDateContainer) customDateContainer.classList.add('hidden');
+      dateFilter.preset = 'ALL';
+      dateFilter.from = null;
+      dateFilter.to = null;
+
+      // 4. Remove any highlighted row rings from "Propojení"
+      document.querySelectorAll('tbody tr').forEach(r => {
+        r.classList.remove('ring-2', 'ring-amber-400', 'bg-amber-500/20');
+      });
+
+      // 5. Apply filters across all grids
+      applyFiltersErp();
+      applyFiltersStatements();
+      applyFiltersBankMsgs();
+      renderPaymentsGrid(rawPayments);
+
+      showToast("Všechny textové i stavové filtry byly vymazány.", "success", 2500);
+    }
+
     // Dynamic Filter Handlers
     function applyFiltersStatements() {
       const stateFilter = document.getElementById('filterStateStmt').value;
@@ -2710,6 +2888,7 @@
         return matchesState && matchesCount && matchesSearch && matchesDate;
       });
 
+      currentFilteredStatements = filtered;
       renderStatementsGrid(filtered);
     }
 
@@ -2724,6 +2903,7 @@
         return matchesState && matchesSearch && matchesDate;
       });
 
+      currentFilteredBank = filtered;
       renderBankMessagesGrid(filtered);
     }
 
@@ -2752,17 +2932,19 @@
         return matchesType && matchesState && matchesSearch && matchesDate;
       });
 
+      currentFilteredErp = filtered;
       renderErpGrid(filtered);
     }
 
-    async function fetchReqDataFromDS(reqId) {
+    async function fetchReqDataFromDS(reqId, customTitle = null) {
       if (!reqId) return;
       const cleanId = String(reqId).trim();
+      const title = customTitle || `Detail Požadavku z DataService (${cleanId})`;
 
       // 1. Primary Maintenance API: /api/v1/Maintenance/GetStatementReqDataFromDS/{tenantId}/{id}
       try {
         const maintReq = await fetchApi(`/api/v1/Maintenance/GetStatementReqDataFromDS/${config.tenantId}/${cleanId}`, 'GET');
-        showDetailModal(`Detail Požadavku z DataService (${cleanId})`, maintReq);
+        showDetailModal(title, maintReq);
         return;
       } catch (err1) {
         // Silent fallback
@@ -2771,13 +2953,13 @@
       // 2. Secondary Maintenance API: /api/v1/Maintenance/GetFile/{tenantId}/{id}
       try {
         const maintFile = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${cleanId}`, 'GET');
-        showDetailModal(`Detail Souboru Požadavku (${cleanId})`, maintFile);
+        showDetailModal(title, maintFile);
         return;
       } catch (err2) {
         // 3. Fallback to Utility API: /api/v1/Utility/GetReqDataFromDS/{id}
         try {
           const reqData = await fetchApi(`/api/v1/Utility/GetReqDataFromDS/${cleanId}`, 'GET');
-          showDetailModal(`Detail Požadavku z DataService (${cleanId})`, reqData);
+          showDetailModal(title, reqData);
           return;
         } catch (err3) {
           logConsole(`Všechny pokusy o načtení požadavku ${cleanId} selhaly.`, err3.message);
@@ -2786,8 +2968,9 @@
       }
     }
 
-    async function fetchMaintenanceFile(fileId) {
+    async function fetchMaintenanceFile(fileId, customTitle = null) {
       if (!fileId) return;
+      const title = customTitle || `Detail Souboru (${fileId})`;
       try {
         const fileContent = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${fileId}`, 'GET');
 
@@ -2811,10 +2994,10 @@
           if (iconEl) iconEl.classList.remove('hidden');
         }
 
-        showDetailModal(`Detail Souboru (${fileId})`, fileContent);
+        showDetailModal(title, fileContent);
       } catch (err) {
         logConsole("Chyba při načítání souboru", err.message);
-        showDetailModal(`Chyba Souboru (${fileId})`, err.message);
+        showDetailModal(title, err.message);
       }
     }
 
@@ -2969,7 +3152,7 @@
         return;
       }
 
-      tbody.innerHTML = items.map(item => {
+      tbody.innerHTML = items.map((item, index) => {
         const count = item.numberOfStatements !== undefined && item.numberOfStatements !== null ? Number(item.numberOfStatements) : 0;
         const countBadgeHtml = count === 0
           ? `<span class="px-2.5 py-0.5 rounded font-mono font-bold inline-flex items-center gap-1.5 badge-count-zero shadow-sm" title="Počet stažených výpisů: 0 (žádný výpis nenalezen)"><i class="fa-solid fa-triangle-exclamation text-[11px] text-red-400"></i> 0</span>`
@@ -2997,10 +3180,10 @@
             ` : '-'}
           </td>
           <td class="p-3 flex items-center gap-1.5">
-            ${item.requestReferenceId || item.code ? `<button onclick="fetchReqDataFromDS('${item.requestReferenceId || item.code}')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-export"></i> Požadavek</button>` : ''}
-            ${item.statementJsonFileReferenceId ? `<button onclick="fetchMaintenanceFile('${item.statementJsonFileReferenceId}')" title="Načíst stažený výpis (JSON)" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-file-import"></i> Výpis</button>` : ''}
+            ${item.requestReferenceId || item.code ? `<button onclick="openItemModal('statements', ${index}, 'request')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-export"></i> Požadavek</button>` : ''}
+            ${item.statementJsonFileReferenceId ? `<button onclick="openItemModal('statements', ${index}, 'statement')" title="Načíst stažený výpis (JSON)" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-file-import"></i> Výpis</button>` : ''}
             ${item.requestReferenceId ? `<button onclick="linkToRef('${item.requestReferenceId}')" title="Filtrovat propojené zprávy v bance" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-propojeni"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
-            <button onclick="showDetailModal('Detail Výpisu', ${JSON.stringify(item).replace(/"/g, '&quot;')})" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
+            <button onclick="openItemModal('statements', ${index}, 'info')" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
           </td>
         </tr>
       `;
@@ -3017,7 +3200,7 @@
         return;
       }
 
-      tbody.innerHTML = items.map(item => `
+      tbody.innerHTML = items.map((item, index) => `
         <tr class="hover:bg-gray-800/40 transition">
           <td class="p-3 font-mono font-medium text-emerald-500">
             <div class="flex items-center gap-2">
@@ -3039,16 +3222,17 @@
             ` : '-'}
           </td>
           <td class="p-3 flex items-center gap-1.5">
-            ${item.requestReferenceId || item.code ? `<button onclick="fetchReqDataFromDS('${item.requestReferenceId || item.code}')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-export"></i> Požadavek</button>` : ''}
-            ${item.responseJsonId ? `<button onclick="fetchMaintenanceFile('${item.responseJsonId}')" title="Načíst odpověď banky" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-file-import"></i> Odpověď</button>` : ''}
+            ${item.requestReferenceId || item.code ? `<button onclick="openItemModal('bank', ${index}, 'request')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-export"></i> Požadavek</button>` : ''}
+            ${item.responseJsonId ? `<button onclick="openItemModal('bank', ${index}, 'response')" title="Načíst odpověď banky" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-file-import"></i> Odpověď</button>` : ''}
             ${item.requestReferenceId ? `<button onclick="linkToRef('${item.requestReferenceId}')" title="Filtrovat propojenou žádost o výpis" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-propojeni"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
-            <button onclick="showDetailModal('Detail Bank Zprávy', ${JSON.stringify(item).replace(/"/g, '&quot;')})" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
+            <button onclick="openItemModal('bank', ${index}, 'info')" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
           </td>
         </tr>
       `).join('');
     }
 
     function renderPaymentsGrid(items) {
+      currentFilteredPayments = items || [];
       const tbody = document.getElementById('gridPaymentsBody');
       const cntEl = document.getElementById('cntPayments');
       if (cntEl) cntEl.textContent = items ? items.length : 0;
@@ -3058,7 +3242,7 @@
         return;
       }
 
-      tbody.innerHTML = items.map(item => `
+      tbody.innerHTML = items.map((item, index) => `
         <tr class="hover:bg-gray-800/40 transition">
           <td class="p-3 font-mono font-medium text-emerald-500">${item.id || '-'}</td>
           <td class="p-3 font-mono text-xs">${item.bankAccount || '-'} <span class="text-gray-500">(${item.bic || item.bankCode || ''})</span></td>
@@ -3067,7 +3251,7 @@
           <td class="p-3">${renderStateBadge(item.state || item.authorizationStatus, item.stateLocalized || item.statusLocalized)}</td>
           <td class="p-3 text-xs text-gray-400">${item.createdDate ? new Date(item.createdDate).toLocaleString('cs-CZ') : '-'}</td>
           <td class="p-3">
-            <button onclick="showDetailModal('Detail Platby ${item.id}', ${JSON.stringify(item).replace(/"/g, '&quot;')})" class="px-2.5 py-1 text-xs rounded font-medium btn-action-emerald">
+            <button onclick="openItemModal('payments', ${index}, 'info')" class="px-2.5 py-1 text-xs rounded font-medium btn-action-emerald">
               <i class="fa-solid fa-eye"></i> Detail
             </button>
           </td>
@@ -3085,7 +3269,7 @@
         return;
       }
 
-      tbody.innerHTML = items.map(item => `
+      tbody.innerHTML = items.map((item, index) => `
         <tr class="hover:bg-gray-800/40 transition">
           <td class="p-3 font-mono font-medium text-amber-500">
             <div class="flex items-center gap-2">
@@ -3100,10 +3284,10 @@
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
           <td class="p-3 font-mono text-xs text-gray-400">${item.iban || item.bankAccount || '-'}</td>
           <td class="p-3 flex items-center gap-1.5">
-            ${item.requestReferenceId || item.code ? `<button onclick="fetchReqDataFromDS('${item.requestReferenceId || item.code}')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-code"></i> Požadavek</button>` : ''}
-            ${item.responseJsonId ? `<button onclick="fetchMaintenanceFile('${item.responseJsonId}')" title="Načíst odpověď z banky / systému" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-reply"></i> Odpověď</button>` : ''}
+            ${item.requestReferenceId || item.code ? `<button onclick="openItemModal('erp', ${index}, 'request')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-code"></i> Požadavek</button>` : ''}
+            ${item.responseJsonId ? `<button onclick="openItemModal('erp', ${index}, 'response')" title="Načíst odpověď z banky / systému" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-reply"></i> Odpověď</button>` : ''}
             ${item.requestReferenceId || item.code ? `<button onclick="linkToRef('${item.requestReferenceId || item.code}')" title="Filtrovat propojené zprávy" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-propojeni"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
-            <button onclick="showDetailModal('Detail ERP Zprávy', ${JSON.stringify(item).replace(/"/g, '&quot;')})" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
+            <button onclick="openItemModal('erp', ${index}, 'info')" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
           </td>
         </tr>
       `).join('');
