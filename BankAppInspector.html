@@ -832,12 +832,13 @@
                 <th class="p-3">Datum</th>
                 <th class="p-3">Typ</th>
                 <th class="p-3">Stav</th>
+                <th class="p-3 text-center">Počet výpisů</th>
                 <th class="p-3">IBAN / Účet</th>
                 <th class="p-3">Akce (Payload / Odpověď)</th>
               </tr>
             </thead>
             <tbody id="gridErpBody" class="divide-y divide-gray-800/60 text-gray-300">
-              <tr><td colspan="8" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva. Zadejte Tenant ID v horní liště.</td></tr>
+              <tr><td colspan="9" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva. Zadejte Tenant ID v horní liště.</td></tr>
             </tbody>
           </table>
         </div>
@@ -1455,9 +1456,62 @@
       return null; // Unknown / pending scan
     }
 
+    function findLinkedStatement(erpItem) {
+      if (!erpItem || !rawStatements || rawStatements.length === 0) return null;
+      const erpCode = erpItem.code ? String(erpItem.code).trim().toLowerCase() : null;
+      const erpRef = erpItem.requestReferenceId ? String(erpItem.requestReferenceId).trim().toLowerCase() : null;
+      const erpResp = erpItem.responseJsonId ? String(erpItem.responseJsonId).trim().toLowerCase() : null;
+
+      return rawStatements.find(s => {
+        const sCode = s.code ? String(s.code).trim().toLowerCase() : null;
+        const sRef = s.requestReferenceId ? String(s.requestReferenceId).trim().toLowerCase() : null;
+        const sFileId = s.statementJsonFileReferenceId ? String(s.statementJsonFileReferenceId).trim().toLowerCase() : null;
+        const sResp = s.responseJsonId ? String(s.responseJsonId).trim().toLowerCase() : null;
+
+        if (erpCode && (sCode === erpCode || sRef === erpCode || sFileId === erpCode)) return true;
+        if (erpRef && (sCode === erpRef || sRef === erpRef || sFileId === erpRef)) return true;
+        if (erpResp && (sResp === erpResp || sFileId === erpResp)) return true;
+        return false;
+      }) || null;
+    }
+
+    function getErpStatementInfo(erpItem) {
+      if (!erpItem) return { isStatement: false, count: null, statementFileId: null, responseFileId: null, linked: null };
+      const isStatement = String(erpItem.type || erpItem.typeLocalized || '').toLowerCase().includes('statement')
+        || String(erpItem.type || '').toLowerCase().includes('výpis');
+
+      const linked = findLinkedStatement(erpItem);
+
+      let count = null;
+      if (erpItem.numberOfStatements !== undefined && erpItem.numberOfStatements !== null) {
+        count = Number(erpItem.numberOfStatements);
+      } else if (linked && linked.numberOfStatements !== undefined && linked.numberOfStatements !== null) {
+        count = Number(linked.numberOfStatements);
+      } else if (isStatement && (erpItem.state === 'Error' || (linked && linked.state === 'Error'))) {
+        count = 0;
+      }
+
+      const statementFileId = erpItem.statementJsonFileReferenceId
+        || (linked && linked.statementJsonFileReferenceId)
+        || null;
+
+      const responseFileId = erpItem.responseJsonId
+        || (linked && linked.responseJsonId)
+        || null;
+
+      return {
+        isStatement,
+        count,
+        statementFileId,
+        responseFileId,
+        linked
+      };
+    }
+
     function renderDateStatusIcon(item) {
       if (!item) return `<span class="w-5 h-5 flex-shrink-0 flex items-center justify-center inline-block"></span>`;
-      const key = item.statementJsonFileReferenceId || item.responseJsonId || item.code || item.requestReferenceId;
+      const linked = findLinkedStatement(item);
+      const key = item.statementJsonFileReferenceId || item.responseJsonId || (linked && (linked.statementJsonFileReferenceId || linked.responseJsonId)) || item.code || item.requestReferenceId;
       const status = statementMismatchCache[key] !== undefined ? statementMismatchCache[key] : checkDirectDateMismatch(item);
 
       return renderStatusIconHtml(key, status);
@@ -1722,7 +1776,7 @@
       const tbodyBank = document.getElementById('gridBankMessagesBody');
       const tbodyPay = document.getElementById('gridPaymentsBody');
 
-      if (tbodyErp) tbodyErp.innerHTML = lockedHtml(8, 'ERP Požadavky');
+      if (tbodyErp) tbodyErp.innerHTML = lockedHtml(9, 'ERP Požadavky');
       if (tbodyStmt) tbodyStmt.innerHTML = lockedHtml(8, 'Výpisy');
       if (tbodyBank) tbodyBank.innerHTML = lockedHtml(8, 'Bankovní Zprávy');
       if (tbodyPay) tbodyPay.innerHTML = lockedHtml(7, 'Dávkové Příkazy');
@@ -2603,6 +2657,9 @@
         rawStatements = [];
       }
       applyFiltersStatements();
+      if (rawErpMessages && rawErpMessages.length > 0) {
+        applyFiltersErp();
+      }
       scanStatementDateMismatches(rawStatements);
     }
 
@@ -2677,7 +2734,7 @@
       const tbodyBank = document.getElementById('gridBankMessagesBody');
       const tbodyPay = document.getElementById('gridPaymentsBody');
 
-      if (tbodyErp) tbodyErp.innerHTML = loadingHtml(8, 'ERP Požadavky');
+      if (tbodyErp) tbodyErp.innerHTML = loadingHtml(9, 'ERP Požadavky');
       if (tbodyStmt) tbodyStmt.innerHTML = loadingHtml(8, 'Výpisy');
       if (tbodyBank) tbodyBank.innerHTML = loadingHtml(8, 'Bankovní Zprávy');
       if (tbodyPay) tbodyPay.innerHTML = loadingHtml(7, 'Dávkové Příkazy');
@@ -2780,21 +2837,25 @@
       const itemCode = item.code || item.requestReferenceId || item.id || `#${index + 1}`;
 
       if (action === 'request') {
-        const reqId = item.requestReferenceId || item.code;
+        const linked = (modalNavContext.listType === 'erp') ? findLinkedStatement(item) : null;
+        const reqId = item.requestReferenceId || item.code || (linked && (linked.requestReferenceId || linked.code));
         if (!reqId) {
           showDetailModal(`Požadavek (${itemCode})`, { error: "Záznam neobsahuje kód ani RequestReferenceId." });
           return;
         }
         await fetchReqDataFromDS(reqId, `Detail Požadavku (${itemCode})`);
       } else if (action === 'response') {
-        const fileId = item.responseJsonId;
+        const linked = (modalNavContext.listType === 'erp') ? findLinkedStatement(item) : null;
+        const fileId = item.responseJsonId || (linked && linked.responseJsonId);
         if (!fileId) {
-          showDetailModal(`Odpověď Banky (${itemCode})`, { message: "Tento záznam nemá evidováno žádné responseJsonId." });
+          showDetailModal(`Odpověď (${itemCode})`, { message: "Tento záznam nemá evidováno žádné responseJsonId." });
           return;
         }
-        await fetchMaintenanceFile(fileId, `Detail Odpovědi Banky (${itemCode})`);
+        const respTitle = modalNavContext.listType === 'erp' ? `Detail Odpovědi pro ERP (${itemCode})` : `Detail Odpovědi Banky (${itemCode})`;
+        await fetchMaintenanceFile(fileId, respTitle);
       } else if (action === 'statement') {
-        const fileId = item.statementJsonFileReferenceId;
+        const linked = (modalNavContext.listType === 'erp') ? findLinkedStatement(item) : null;
+        const fileId = item.statementJsonFileReferenceId || (linked && linked.statementJsonFileReferenceId);
         if (!fileId) {
           showDetailModal(`Výpis (${itemCode})`, { message: "Tento záznam nemá evidováno žádné statementJsonFileReferenceId." });
           return;
@@ -3181,7 +3242,8 @@
           </td>
           <td class="p-3 flex items-center gap-1.5">
             ${item.requestReferenceId || item.code ? `<button onclick="openItemModal('statements', ${index}, 'request')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-export"></i> Požadavek</button>` : ''}
-            ${item.statementJsonFileReferenceId ? `<button onclick="openItemModal('statements', ${index}, 'statement')" title="Načíst stažený výpis (JSON)" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-file-import"></i> Výpis</button>` : ''}
+            ${item.statementJsonFileReferenceId ? `<button onclick="openItemModal('statements', ${index}, 'statement')" title="Načíst stažený výpis (JSON z banky)" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-file-import"></i> Výpis</button>` : ''}
+            ${item.responseJsonId ? `<button onclick="openItemModal('statements', ${index}, 'response')" title="Načíst odpověď pro ERP" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-reply"></i> Odpověď</button>` : ''}
             ${item.requestReferenceId ? `<button onclick="linkToRef('${item.requestReferenceId}')" title="Filtrovat propojené zprávy v bance" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-propojeni"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
             <button onclick="openItemModal('statements', ${index}, 'info')" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
           </td>
@@ -3265,11 +3327,28 @@
       if (cntEl) cntEl.textContent = items ? items.length : 0;
 
       if (!items || items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-gray-500">Žádné ERP zprávy pro zvolený filtr a Tenant ID.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-gray-500">Žádné ERP zprávy pro zvolený filtr a Tenant ID.</td></tr>`;
         return;
       }
 
-      tbody.innerHTML = items.map((item, index) => `
+      tbody.innerHTML = items.map((item, index) => {
+        const stmtInfo = getErpStatementInfo(item);
+
+        let countBadgeHtml = '<span class="text-gray-600 font-mono">-</span>';
+        if (stmtInfo.count !== null) {
+          countBadgeHtml = stmtInfo.count === 0
+            ? `<span class="px-2.5 py-0.5 rounded font-mono font-bold inline-flex items-center gap-1.5 badge-count-zero shadow-sm" title="Počet stažených výpisů: 0 (žádný výpis nenalezen)"><i class="fa-solid fa-triangle-exclamation text-[11px] text-red-400"></i> 0</span>`
+            : `<span class="px-2.5 py-0.5 rounded font-mono font-bold inline-flex items-center gap-1.5 badge-count-positive" title="Počet stažených výpisů: ${stmtInfo.count}"><i class="fa-solid fa-file-invoice text-[11px] text-blue-400"></i> ${stmtInfo.count}</span>`;
+        } else if (stmtInfo.isStatement) {
+          countBadgeHtml = `<span class="px-2 py-0.5 text-xs text-gray-500 font-mono" title="Počet výpisů nebyl zjištěn">-</span>`;
+        }
+
+        const hasRequest = !!(item.requestReferenceId || item.code);
+        const hasResponse = !!(stmtInfo.responseFileId || item.responseJsonId);
+        const hasStatement = !!stmtInfo.statementFileId;
+        const hasRef = !!(item.requestReferenceId || item.code);
+
+        return `
         <tr class="hover:bg-gray-800/40 transition">
           <td class="p-3 font-mono font-medium text-amber-500">
             <div class="flex items-center gap-2">
@@ -3282,15 +3361,18 @@
           <td class="p-3 text-xs text-gray-400">${item.date ? new Date(item.date).toLocaleString('cs-CZ') : '-'}</td>
           <td class="p-3 font-mono text-xs"><span class="px-2 py-0.5 rounded font-semibold border btn-action-amber">${item.typeLocalized || item.type || '-'}</span></td>
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
+          <td class="p-3 text-center">${countBadgeHtml}</td>
           <td class="p-3 font-mono text-xs text-gray-400">${item.iban || item.bankAccount || '-'}</td>
           <td class="p-3 flex items-center gap-1.5">
-            ${item.requestReferenceId || item.code ? `<button onclick="openItemModal('erp', ${index}, 'request')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-code"></i> Požadavek</button>` : ''}
-            ${item.responseJsonId ? `<button onclick="openItemModal('erp', ${index}, 'response')" title="Načíst odpověď z banky / systému" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-reply"></i> Odpověď</button>` : ''}
-            ${item.requestReferenceId || item.code ? `<button onclick="linkToRef('${item.requestReferenceId || item.code}')" title="Filtrovat propojené zprávy" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-propojeni"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
+            ${hasRequest ? `<button onclick="openItemModal('erp', ${index}, 'request')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-code"></i> Požadavek</button>` : ''}
+            ${hasResponse ? `<button onclick="openItemModal('erp', ${index}, 'response')" title="Načíst odpověď BankApp pro ERP" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-reply"></i> Odpověď</button>` : ''}
+            ${hasStatement ? `<button onclick="openItemModal('erp', ${index}, 'statement')" title="Načíst stažený výpis z banky (JSON)" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-file-import"></i> Výpis</button>` : ''}
+            ${hasRef ? `<button onclick="linkToRef('${item.requestReferenceId || item.code}')" title="Filtrovat propojené zprávy" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-propojeni"><i class="fa-solid fa-diagram-project"></i> Propojení</button>` : ''}
             <button onclick="openItemModal('erp', ${index}, 'info')" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info"><i class="fa-solid fa-eye"></i> Info</button>
           </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function filterGrid(tableId, query) {
