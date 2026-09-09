@@ -1249,14 +1249,36 @@
       paginationState.erp.page = Math.max(1, paginationState.erp.page + delta);
       const lbl = document.getElementById('lblPageErp');
       if (lbl) lbl.textContent = paginationState.erp.page;
-      await fetchErpData();
+
+      paginationState.stmt.page = paginationState.erp.page;
+      const lblStmt = document.getElementById('lblPageStmt');
+      if (lblStmt) lblStmt.textContent = paginationState.stmt.page;
+
+      await Promise.all([fetchErpData(), fetchStatementsData()]);
     }
     async function changeErpPageSize(val) {
-      paginationState.erp.pageSize = parseInt(val) || 100;
+      const size = parseInt(val) || 100;
+      paginationState.erp.pageSize = size;
       paginationState.erp.page = 1;
       const lbl = document.getElementById('lblPageErp');
       if (lbl) lbl.textContent = 1;
-      await fetchErpData();
+
+      // Keep Statements and Bank messages in sync so all ERP records have linked statement data/files loaded
+      paginationState.stmt.pageSize = size;
+      paginationState.stmt.page = 1;
+      const selStmt = document.getElementById('pageSizeStmt');
+      if (selStmt) selStmt.value = String(size);
+      const lblStmt = document.getElementById('lblPageStmt');
+      if (lblStmt) lblStmt.textContent = 1;
+
+      paginationState.bank.pageSize = size;
+      paginationState.bank.page = 1;
+      const selBank = document.getElementById('pageSizeBank');
+      if (selBank) selBank.value = String(size);
+      const lblBank = document.getElementById('lblPageBank');
+      if (lblBank) lblBank.textContent = 1;
+
+      await Promise.all([fetchErpData(), fetchStatementsData(), fetchBankData()]);
     }
 
     // Statement pagination handlers
