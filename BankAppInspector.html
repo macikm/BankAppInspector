@@ -1444,38 +1444,148 @@
 
     let statementMismatchCache = {};
 
-    function checkDirectDateMismatch(item) {
-      if (!item) return null;
-      const from = item.dateFrom || item.fromDate || item.date_from;
-      const to = item.dateTo || item.toDate || item.date_to;
-      if (from && to) {
+    function evaluateStatementPayload(content, fallbackDate = null) {
+      if (!content) {
         return {
-          isMismatch: isCalendarDateMismatch(from, to),
-          dateFrom: from,
-          dateTo: to
+          isMismatch: false,
+          dateMismatch: false,
+          periodMismatch: false,
+          dateFrom: fallbackDate,
+          dateTo: fallbackDate,
+          period: null,
+          periodLabel: null,
+          tooltip: fallbackDate ? `OK: Výpis (${formatDateCz(fallbackDate)})` : `OK: Výpis`
         };
       }
 
-      const itemsList = Array.isArray(item.statements) ? item.statements
-        : Array.isArray(item.payload) ? item.payload
-        : null;
+      let list = null;
+      if (Array.isArray(content)) {
+        list = content;
+      } else if (content && Array.isArray(content.accountStatements)) {
+        list = content.accountStatements;
+      } else if (content && Array.isArray(content.statements)) {
+        list = content.statements;
+      } else if (content && Array.isArray(content.payload)) {
+        list = content.payload;
+      }
 
-      if (itemsList && itemsList.length > 0) {
-        const st0 = itemsList[0];
-        let isMismatch = false;
-        for (const st of itemsList) {
+      let isMismatch = false;
+      let dateMismatch = false;
+      let periodMismatch = false;
+      let dFrom = null;
+      let dTo = null;
+      let periodVal = null;
+
+      if (list && list.length > 0) {
+        for (const st of list) {
+          if (!st) continue;
+          if (!dFrom && st.dateFrom) dFrom = st.dateFrom;
+          if (!dTo && st.dateTo) dTo = st.dateTo;
+          if (!periodVal && st.period) periodVal = st.period;
+
           if (st.dateFrom && st.dateTo && isCalendarDateMismatch(st.dateFrom, st.dateTo)) {
-            isMismatch = true;
-            break;
+            dateMismatch = true;
+            dFrom = st.dateFrom;
+            dTo = st.dateTo;
+          }
+
+          if (st.period) {
+            const p = String(st.period).trim().toUpperCase();
+            if (p && p !== 'D' && p !== 'DAILY' && p !== 'DENNÍ' && p !== 'DAY') {
+              periodMismatch = true;
+              periodVal = st.period;
+            }
           }
         }
-        return {
-          isMismatch: isMismatch,
-          dateFrom: st0.dateFrom,
-          dateTo: st0.dateTo
-        };
+      } else if (content && typeof content === 'object') {
+        dFrom = content.dateFrom || content.fromDate || content.date_from || null;
+        dTo = content.dateTo || content.toDate || content.date_to || null;
+        periodVal = content.period || null;
+
+        if (dFrom && dTo && isCalendarDateMismatch(dFrom, dTo)) {
+          dateMismatch = true;
+        }
+
+        if (periodVal) {
+          const p = String(periodVal).trim().toUpperCase();
+          if (p && p !== 'D' && p !== 'DAILY' && p !== 'DENNÍ' && p !== 'DAY') {
+            periodMismatch = true;
+          }
+        }
       }
-      return null; // Unknown / pending scan
+
+      // Regex fallback if needed
+      if (!dateMismatch && !periodMismatch && content) {
+        const raw = typeof content === 'string' ? content : JSON.stringify(content);
+        const fromM = raw.match(/"dateFrom"\s*:\s*"([^"]+)"/i);
+        const toM = raw.match(/"dateTo"\s*:\s*"([^"]+)"/i);
+        const perM = raw.match(/"period"\s*:\s*"([^"]+)"/i);
+
+        if (fromM && toM) {
+          dFrom = dFrom || fromM[1];
+          dTo = dTo || toM[1];
+          if (isCalendarDateMismatch(fromM[1], toM[1])) {
+            dateMismatch = true;
+          }
+        }
+        if (perM) {
+          periodVal = periodVal || perM[1];
+          const p = String(perM[1]).trim().toUpperCase();
+          if (p && p !== 'D' && p !== 'DAILY' && p !== 'DENNÍ' && p !== 'DAY') {
+            periodMismatch = true;
+          }
+        }
+      }
+
+      isMismatch = dateMismatch || periodMismatch;
+      dFrom = dFrom || fallbackDate;
+      dTo = dTo || fallbackDate;
+
+      const fromStr = dFrom ? formatDateCz(dFrom) : '';
+      const toStr = dTo ? formatDateCz(dTo) : '';
+      const rangeStr = (fromStr && toStr && fromStr !== toStr) ? ` (${fromStr} – ${toStr})` : (fromStr ? ` (${fromStr})` : '');
+
+      let periodLabel = periodVal;
+      if (periodVal) {
+        const pUpper = String(periodVal).trim().toUpperCase();
+        if (pUpper === 'T' || pUpper === 'W') periodLabel = `${periodVal} (týdenní)`;
+        else if (pUpper === 'M') periodLabel = `${periodVal} (měsíční)`;
+        else if (pUpper === 'Q') periodLabel = `${periodVal} (kvartální)`;
+        else if (pUpper === 'Y' || pUpper === 'R') periodLabel = `${periodVal} (roční)`;
+        else if (pUpper === 'D') periodLabel = `${periodVal} (denní)`;
+        else periodLabel = `${periodVal}`;
+      }
+
+      let tooltip = '';
+      if (dateMismatch && periodMismatch) {
+        tooltip = `Chyba výpisu: Vícedenní rozsah${rangeStr} a chybná perioda '${periodLabel}' (očekáváno 'D' - denní)`;
+      } else if (periodMismatch) {
+        tooltip = `Chyba výpisu: Chybná perioda '${periodLabel}' (očekáváno 'D' - denní)${rangeStr}`;
+      } else if (dateMismatch) {
+        tooltip = `Upozornění: Vícedenní rozsah výpisu dateFrom <> dateTo${rangeStr}`;
+      } else {
+        tooltip = `OK: Jednodenní výpis${rangeStr}`;
+      }
+
+      return {
+        isMismatch,
+        dateMismatch,
+        periodMismatch,
+        dateFrom: dFrom,
+        dateTo: dTo,
+        period: periodVal,
+        periodLabel,
+        tooltip
+      };
+    }
+
+    function checkDirectDateMismatch(item) {
+      if (!item) return null;
+      const hasPayload = item.accountStatements || item.statements || item.payload || (item.dateFrom && item.dateTo) || item.period;
+      if (hasPayload) {
+        return evaluateStatementPayload(item, item.date);
+      }
+      return null; // Unknown / pending async scan
     }
 
     function findLinkedStatement(erpItem) {
@@ -1540,21 +1650,25 @@
     }
 
     function renderStatusIconHtml(key, status) {
-      let content = `<span class="w-1.5 h-1.5 rounded-full bg-gray-700/40 inline-block" title="Načítám rozsah výpisu..."></span>`;
+      let content = `<span class="w-1.5 h-1.5 rounded-full bg-gray-700/40 inline-block" title="Načítám rozsah a periodu výpisu..."></span>`;
 
       if (status !== null && status !== undefined) {
         const isMismatch = typeof status === 'object' ? status.isMismatch : status;
+        const tooltip = typeof status === 'object' && status.tooltip ? status.tooltip : null;
         const fromStr = typeof status === 'object' && status.dateFrom ? formatDateCz(status.dateFrom) : '';
         const toStr = typeof status === 'object' && status.dateTo ? formatDateCz(status.dateTo) : '';
 
         if (isMismatch === true) {
-          const dateRangeText = (fromStr && toStr && fromStr !== toStr)
-            ? ` (${fromStr} – ${toStr})`
-            : (fromStr ? ` (${fromStr})` : '');
-          content = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="Upozornění: Vícedenní rozsah výpisu dateFrom <> dateTo${dateRangeText}"></i>`;
+          const defaultTooltip = (fromStr && toStr && fromStr !== toStr)
+            ? `Upozornění: Vícedenní rozsah výpisu (${fromStr} – ${toStr})`
+            : `Upozornění / Chyba výpisu`;
+          const titleText = escapeHtml(tooltip || defaultTooltip);
+          content = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="${titleText}"></i>`;
         } else if (isMismatch === false) {
           const dateText = fromStr ? ` (${fromStr})` : '';
-          content = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="OK: Jednodenní výpis${dateText}"></i>`;
+          const defaultTooltip = `OK: Jednodenní výpis${dateText}`;
+          const titleText = escapeHtml(tooltip || defaultTooltip);
+          content = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="${titleText}"></i>`;
         }
       }
 
@@ -1580,65 +1694,34 @@
           try {
             // Pass silent = true so background scanning does not flood the raw console
             const fileContent = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${fileId}`, 'GET', null, true);
-            let isMismatch = false;
-            let dFrom = null;
-            let dTo = null;
-
-            if (fileContent) {
-              const arrayData = Array.isArray(fileContent.statements) ? fileContent.statements
-                : Array.isArray(fileContent.payload) ? fileContent.payload
-                : null;
-
-              if (arrayData && arrayData.length > 0) {
-                const st0 = arrayData[0];
-                dFrom = st0.dateFrom;
-                dTo = st0.dateTo;
-                for (const st of arrayData) {
-                  if (st.dateFrom && st.dateTo && isCalendarDateMismatch(st.dateFrom, st.dateTo)) {
-                    isMismatch = true;
-                    dFrom = st.dateFrom;
-                    dTo = st.dateTo;
-                    break;
-                  }
-                }
-              } else if (fileContent.dateFrom && fileContent.dateTo) {
-                dFrom = fileContent.dateFrom;
-                dTo = fileContent.dateTo;
-                isMismatch = isCalendarDateMismatch(dFrom, dTo);
-              } else {
-                const raw = JSON.stringify(fileContent);
-                const fromM = raw.match(/"dateFrom"\s*:\s*"([^"]+)"/i);
-                const toM = raw.match(/"dateTo"\s*:\s*"([^"]+)"/i);
-                if (fromM && toM) {
-                  dFrom = fromM[1];
-                  dTo = toM[1];
-                  isMismatch = isCalendarDateMismatch(dFrom, dTo);
-                }
-              }
-            }
-
-            const info = { isMismatch, dateFrom: dFrom || item.date, dateTo: dTo || item.date };
+            const info = evaluateStatementPayload(fileContent, item.date);
             statementMismatchCache[key] = info;
 
-            const iconEl = document.getElementById(`dateWarn-${key}`) || document.getElementById(`dateWarn-${item.code}`) || document.getElementById(`dateWarn-${item.requestReferenceId}`);
-            if (iconEl) {
-              const fromStr = dFrom ? formatDateCz(dFrom) : formatDateCz(item.date);
-              const toStr = dTo ? formatDateCz(dTo) : formatDateCz(item.date);
-              if (isMismatch) {
-                const rangeText = (fromStr && toStr && fromStr !== toStr) ? ` (${fromStr} – ${toStr})` : (fromStr ? ` (${fromStr})` : '');
-                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="Upozornění: Vícedenní rozsah výpisu dateFrom <> dateTo${rangeText}"></i>`;
+            const iconEls = [
+              document.getElementById(`dateWarn-${key}`),
+              item.code ? document.getElementById(`dateWarn-${item.code}`) : null,
+              item.requestReferenceId ? document.getElementById(`dateWarn-${item.requestReferenceId}`) : null
+            ].filter(Boolean);
+
+            iconEls.forEach(iconEl => {
+              if (info.isMismatch) {
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="${escapeHtml(info.tooltip)}"></i>`;
               } else {
-                const dateText = fromStr ? ` (${fromStr})` : '';
-                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="OK: Jednodenní výpis${dateText}"></i>`;
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="${escapeHtml(info.tooltip)}"></i>`;
               }
-            }
+            });
           } catch (e) {
-            statementMismatchCache[key] = { isMismatch: false, dateFrom: item.date, dateTo: item.date };
-            const iconEl = document.getElementById(`dateWarn-${key}`) || document.getElementById(`dateWarn-${item.code}`) || document.getElementById(`dateWarn-${item.requestReferenceId}`);
-            if (iconEl) {
-              const dateText = item.date ? ` (${formatDateCz(item.date)})` : '';
-              iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="OK: Výpis${dateText}"></i>`;
-            }
+            const fallbackInfo = { isMismatch: false, dateFrom: item.date, dateTo: item.date, tooltip: item.date ? `OK: Výpis (${formatDateCz(item.date)})` : `OK: Výpis` };
+            statementMismatchCache[key] = fallbackInfo;
+            const iconEls = [
+              document.getElementById(`dateWarn-${key}`),
+              item.code ? document.getElementById(`dateWarn-${item.code}`) : null,
+              item.requestReferenceId ? document.getElementById(`dateWarn-${item.requestReferenceId}`) : null
+            ].filter(Boolean);
+
+            iconEls.forEach(iconEl => {
+              iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="${escapeHtml(fallbackInfo.tooltip)}"></i>`;
+            });
           }
         }));
       }
@@ -3057,24 +3140,16 @@
       try {
         const fileContent = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${fileId}`, 'GET');
 
-        // Inspect date mismatch in loaded JSON file
-        let isMismatch = false;
-        if (fileContent) {
-          if (Array.isArray(fileContent.statements)) {
-            for (const st of fileContent.statements) {
-              if (st.dateFrom && st.dateTo && String(st.dateFrom).trim() !== String(st.dateTo).trim()) {
-                isMismatch = true;
-                break;
-              }
-            }
-          } else if (fileContent.dateFrom && fileContent.dateTo && String(fileContent.dateFrom).trim() !== String(fileContent.dateTo).trim()) {
-            isMismatch = true;
+        // Inspect date & period mismatch in loaded JSON file
+        const evalResult = evaluateStatementPayload(fileContent);
+        statementMismatchCache[fileId] = evalResult;
+        const iconEl = document.getElementById(`dateWarn-${fileId}`);
+        if (iconEl) {
+          if (evalResult.isMismatch) {
+            iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="${escapeHtml(evalResult.tooltip)}"></i>`;
+          } else {
+            iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="${escapeHtml(evalResult.tooltip)}"></i>`;
           }
-        }
-        statementMismatchCache[fileId] = isMismatch;
-        if (isMismatch) {
-          const iconEl = document.getElementById(`dateWarn-${fileId}`);
-          if (iconEl) iconEl.classList.remove('hidden');
         }
 
         showDetailModal(title, fileContent);
