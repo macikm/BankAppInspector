@@ -1450,11 +1450,42 @@
           isMismatch: false,
           dateMismatch: false,
           periodMismatch: false,
+          jsonError: false,
           dateFrom: fallbackDate,
           dateTo: fallbackDate,
           period: null,
           periodLabel: null,
           tooltip: fallbackDate ? `OK: Výpis (${formatDateCz(fallbackDate)})` : `OK: Výpis`
+        };
+      }
+
+      // Check for corrupted/invalid JSON or empty bank response
+      if (typeof content === 'object' && (content._isInvalidJson || content._isEmptyResponse || content._errorMessage)) {
+        const msg = content._errorMessage || 'Neplatný nebo prázdný JSON soubor od banky';
+        return {
+          isMismatch: true,
+          dateMismatch: false,
+          periodMismatch: false,
+          jsonError: true,
+          dateFrom: fallbackDate,
+          dateTo: fallbackDate,
+          period: null,
+          periodLabel: null,
+          tooltip: `Chyba: Neplatný / poškozený JSON soubor z banky (${msg})`
+        };
+      }
+
+      if (typeof content === 'string' && /Unexpected end of JSON input|Failed to execute 'json'/i.test(content)) {
+        return {
+          isMismatch: true,
+          dateMismatch: false,
+          periodMismatch: false,
+          jsonError: true,
+          dateFrom: fallbackDate,
+          dateTo: fallbackDate,
+          period: null,
+          periodLabel: null,
+          tooltip: `Chyba: Neplatný / poškozený JSON soubor z banky (${content.trim()})`
         };
       }
 
@@ -1711,7 +1742,13 @@
               }
             });
           } catch (e) {
-            const fallbackInfo = { isMismatch: false, dateFrom: item.date, dateTo: item.date, tooltip: item.date ? `OK: Výpis (${formatDateCz(item.date)})` : `OK: Výpis` };
+            const isErr = /json|unexpected end|syntaxerror|failed to execute|http|network/i.test(e.message || '');
+            const fallbackInfo = {
+              isMismatch: isErr,
+              dateFrom: item.date,
+              dateTo: item.date,
+              tooltip: isErr ? `Chyba při načítání JSON výpisu (${e.message})` : (item.date ? `OK: Výpis (${formatDateCz(item.date)})` : `OK: Výpis`)
+            };
             statementMismatchCache[key] = fallbackInfo;
             const iconEls = [
               document.getElementById(`dateWarn-${key}`),
@@ -1720,7 +1757,11 @@
             ].filter(Boolean);
 
             iconEls.forEach(iconEl => {
-              iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="${escapeHtml(fallbackInfo.tooltip)}"></i>`;
+              if (fallbackInfo.isMismatch) {
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="${escapeHtml(fallbackInfo.tooltip)}"></i>`;
+              } else {
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="${escapeHtml(fallbackInfo.tooltip)}"></i>`;
+              }
             });
           }
         }));
@@ -2457,6 +2498,34 @@
     function formatJsonToSyntaxHtml(jsonObj) {
       if (!jsonObj) return '<span class="text-gray-500 italic">Žádná data</span>';
 
+      // Check for object with parse error flags
+      if (typeof jsonObj === 'object' && (jsonObj._isInvalidJson || jsonObj._isEmptyResponse)) {
+        const errorMsg = jsonObj._errorMessage || (jsonObj._isEmptyResponse ? 'Prázdná odpověď (0 bajtů) - banka nevrátila žádný JSON obsah.' : 'Neplatný JSON formát.');
+        currentModalRawText = jsonObj._rawContent || errorMsg;
+        return `
+          <div class="space-y-4">
+            <div class="p-4 bg-red-950/40 border border-red-800/80 rounded-xl text-red-200 text-xs shadow-lg">
+              <div class="flex items-center gap-2.5 font-bold text-sm text-red-400 mb-1.5">
+                <i class="fa-solid fa-triangle-exclamation text-base"></i>
+                <span>Chyba při zpracování JSON odpovědi od banky</span>
+              </div>
+              <div class="text-red-200/90 leading-relaxed font-sans mb-3">
+                Banka vrátila neplatný, neúplný nebo prázdný datový proud (např. 0 bajtů, neočekávaný konec souboru nebo poškozený JSON). Parser BankApp na tomto vstupu selhal.
+              </div>
+              <div class="p-2.5 bg-black/40 rounded-lg border border-red-900/60 font-mono text-red-300 text-xs break-all">
+                <strong>Chybové hlášení:</strong> ${escapeHtml(errorMsg)}
+              </div>
+            </div>
+            ${jsonObj._rawContent ? `
+              <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-file-lines text-amber-400"></i> Surový přijatý obsah (Raw Body):
+              </div>
+              <pre class="bg-gray-950 p-3 rounded-lg border border-gray-800 text-amber-300/90 font-mono text-xs whitespace-pre-wrap leading-relaxed">${escapeHtml(jsonObj._rawContent)}</pre>
+            ` : ''}
+          </div>
+        `;
+      }
+
       let errorHeaderHtml = '';
       let rawStr = '';
       let targetObj = jsonObj;
@@ -2464,6 +2533,27 @@
 
       if (typeof jsonObj === 'string') {
         let trimmed = jsonObj.trim();
+
+        // Check if string itself is an unexpected JSON parse error
+        if (/Unexpected end of JSON input|Failed to execute 'json'/i.test(trimmed)) {
+          currentModalRawText = trimmed;
+          return `
+            <div class="space-y-4">
+              <div class="p-4 bg-red-950/40 border border-red-800/80 rounded-xl text-red-200 text-xs shadow-lg">
+                <div class="flex items-center gap-2.5 font-bold text-sm text-red-400 mb-1.5">
+                  <i class="fa-solid fa-triangle-exclamation text-base"></i>
+                  <span>Chyba při zpracování JSON odpovědi od banky</span>
+                </div>
+                <div class="text-red-200/90 leading-relaxed font-sans mb-3">
+                  Banka vrátila neplatný, neúplný nebo prázdný datový proud (např. 0 bajtů, neočekávaný konec souboru nebo poškozený JSON). Parser na tomto vstupu selhal.
+                </div>
+                <div class="p-2.5 bg-black/40 rounded-lg border border-red-900/60 font-mono text-red-300 text-xs break-all">
+                  <strong>Chybové hlášení:</strong> ${escapeHtml(trimmed)}
+                </div>
+              </div>
+            </div>
+          `;
+        }
 
         // 1. Try parsing directly as a JSON object/array
         try {
@@ -2739,7 +2829,23 @@
         throw new Error(`HTTP ${res.status}: ${errText}`);
       }
 
-      return await res.json();
+      const resText = await res.text();
+      if (!resText || resText.trim() === '') {
+        return {
+          _isEmptyResponse: true,
+          _errorMessage: "Prázdná odpověď (0 bajtů) - banka nevrátila žádný JSON obsah."
+        };
+      }
+
+      try {
+        return JSON.parse(resText);
+      } catch (parseErr) {
+        return {
+          _isInvalidJson: true,
+          _rawContent: resText,
+          _errorMessage: `Failed to execute 'json' on 'Response': ${parseErr.message}`
+        };
+      }
     }
 
     async function fetchStatementsData() {
