@@ -1768,6 +1768,122 @@
       }
     }
 
+    let statementReqCache = {};
+
+    function getCurrencyBadgeStyle(currency) {
+      const c = String(currency || '').trim().toUpperCase();
+      if (c === 'USD') return 'bg-amber-950/80 text-amber-300 border-amber-700/80 shadow-sm';
+      if (c === 'EUR') return 'bg-emerald-950/80 text-emerald-300 border-emerald-700/80 shadow-sm';
+      if (c === 'CZK') return 'bg-sky-950/80 text-sky-300 border-sky-700/80 shadow-sm';
+      if (c === 'GBP') return 'bg-purple-950/80 text-purple-300 border-purple-700/80 shadow-sm';
+      if (c === 'CHF') return 'bg-rose-950/80 text-rose-300 border-rose-700/80 shadow-sm';
+      if (c === 'PLN') return 'bg-indigo-950/80 text-indigo-300 border-indigo-700/80 shadow-sm';
+      return 'bg-gray-800 text-gray-200 border-gray-600 shadow-sm';
+    }
+
+    function buildCurrencyTooltip(currency, dateFrom, dateTo) {
+      const fromStr = dateFrom ? formatDateCz(dateFrom) : '';
+      const toStr = dateTo ? formatDateCz(dateTo) : '';
+      let rangeText = '';
+      if (fromStr && toStr && fromStr !== toStr) {
+        rangeText = `${fromStr} – ${toStr}`;
+      } else if (fromStr) {
+        rangeText = fromStr;
+      }
+      return rangeText
+        ? `Požadovaná měna výpisu: ${currency}\nPožadované období: ${rangeText}`
+        : `Požadovaná měna výpisu: ${currency}`;
+    }
+
+    function renderCurrencyBadgeHtml(item) {
+      if (!item) return '';
+
+      const linked = findLinkedStatement(item);
+      const key = item.code || item.requestReferenceId || (linked && (linked.code || linked.requestReferenceId));
+      const cached = key ? (statementReqCache[key] || (item.code && statementReqCache[item.code]) || (item.requestReferenceId && statementReqCache[item.requestReferenceId]) || (linked && linked.requestReferenceId && statementReqCache[linked.requestReferenceId])) : null;
+
+      const directCurrency = item.currencyCode || item.currency || item.currency_code;
+      const directFrom = item.dateFrom || item.fromDate || item.date_from;
+      const directTo = item.dateTo || item.toDate || item.date_to;
+
+      const currency = cached?.currencyCode || directCurrency || (linked && (linked.currencyCode || linked.currency));
+      const dateFrom = cached?.dateFrom || directFrom;
+      const dateTo = cached?.dateTo || directTo;
+
+      const classKey = key ? `req-curr-${key}` : '';
+      const fallbackKey = item.code ? `req-curr-${item.code}` : '';
+
+      if (!currency) {
+        return `<span class="req-curr-badge ${classKey} ${fallbackKey} hidden"></span>`;
+      }
+
+      const tooltip = buildCurrencyTooltip(currency, dateFrom, dateTo);
+      const badgeStyle = getCurrencyBadgeStyle(currency);
+
+      return `<span class="req-curr-badge ${classKey} ${fallbackKey} px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide border ${badgeStyle} inline-flex items-center gap-1 cursor-help" title="${escapeHtml(tooltip)}">${escapeHtml(currency)}</span>`;
+    }
+
+    async function scanStatementRequests(items) {
+      if (!items || !Array.isArray(items) || !config.tenantId) return;
+
+      const itemsToScan = items.filter(item => {
+        const reqId = item.requestReferenceId || item.code;
+        return reqId && statementReqCache[reqId] === undefined;
+      });
+
+      if (itemsToScan.length === 0) return;
+
+      for (let i = 0; i < itemsToScan.length; i += 6) {
+        const batch = itemsToScan.slice(i, i + 6);
+        await Promise.all(batch.map(async item => {
+          const reqId = item.requestReferenceId || item.code;
+          if (!reqId || statementReqCache[reqId] !== undefined) return;
+
+          try {
+            let reqData = null;
+            try {
+              reqData = await fetchApi(`/api/v1/Maintenance/GetStatementReqDataFromDS/${config.tenantId}/${reqId}`, 'GET', null, true);
+            } catch (e1) {
+              try {
+                reqData = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${reqId}`, 'GET', null, true);
+              } catch (e2) {}
+            }
+
+            if (reqData && !reqData._isInvalidJson && !reqData._isEmptyResponse) {
+              const curr = reqData.currencyCode || reqData.currency || reqData.currency_code || null;
+              const dFrom = reqData.dateFrom || reqData.fromDate || reqData.date_from || null;
+              const dTo = reqData.dateTo || reqData.toDate || reqData.date_to || null;
+              const info = { currencyCode: curr, dateFrom: dFrom, dateTo: dTo };
+
+              statementReqCache[reqId] = info;
+              if (item.code) statementReqCache[item.code] = info;
+              if (item.requestReferenceId) statementReqCache[item.requestReferenceId] = info;
+
+              if (curr) {
+                const tooltip = buildCurrencyTooltip(curr, dFrom, dTo);
+                const badgeStyle = getCurrencyBadgeStyle(curr);
+
+                const badgeEls = Array.from(document.querySelectorAll(`.req-curr-${reqId}`))
+                  .concat(item.code ? Array.from(document.querySelectorAll(`.req-curr-${item.code}`)) : [])
+                  .concat(item.requestReferenceId ? Array.from(document.querySelectorAll(`.req-curr-${item.requestReferenceId}`)) : []);
+
+                badgeEls.forEach(el => {
+                  el.className = `req-curr-badge req-curr-${reqId} px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide border ${badgeStyle} inline-flex items-center gap-1 cursor-help`;
+                  el.title = tooltip;
+                  el.textContent = curr;
+                  el.classList.remove('hidden');
+                });
+              }
+            } else {
+              statementReqCache[reqId] = { currencyCode: null, dateFrom: null, dateTo: null };
+            }
+          } catch (err) {
+            statementReqCache[reqId] = { currencyCode: null, dateFrom: null, dateTo: null };
+          }
+        }));
+      }
+    }
+
     let currentModalRawText = '';
 
     function toggleTheme() {
@@ -1877,6 +1993,7 @@
       rawBankMessages = [];
       rawPayments = [];
       statementMismatchCache = {};
+      statementReqCache = {};
 
       updateStatusUI(false, "Odhlášeno");
       renderEmptyLockedStateAll();
@@ -1891,6 +2008,8 @@
       rawStatements = [];
       rawBankMessages = [];
       rawPayments = [];
+      statementMismatchCache = {};
+      statementReqCache = {};
 
       updateStatusUI(false, "Relace vypršela");
       renderEmptyLockedStateAll();
@@ -2872,6 +2991,7 @@
         applyFiltersErp();
       }
       scanStatementDateMismatches(rawStatements);
+      scanStatementRequests(rawStatements);
     }
 
     async function fetchBankData() {
@@ -2895,6 +3015,7 @@
       }
       applyFiltersBankMsgs();
       scanStatementDateMismatches(rawBankMessages);
+      scanStatementRequests(rawBankMessages);
     }
 
     async function fetchPaymentsData() {
@@ -2925,6 +3046,7 @@
       }
       applyFiltersErp();
       scanStatementDateMismatches(rawErpMessages);
+      scanStatementRequests(rawErpMessages);
     }
 
     function setTableLoadingStates() {
@@ -3213,10 +3335,31 @@
       const cleanId = String(reqId).trim();
       const title = customTitle || `Detail Požadavku z DataService (${cleanId})`;
 
+      const processAndShow = (data) => {
+        if (data && typeof data === 'object' && !data._isInvalidJson && !data._isEmptyResponse) {
+          const curr = data.currencyCode || data.currency || data.currency_code;
+          const dFrom = data.dateFrom || data.fromDate || data.date_from;
+          const dTo = data.dateTo || data.toDate || data.date_to;
+          if (curr) {
+            statementReqCache[cleanId] = { currencyCode: curr, dateFrom: dFrom, dateTo: dTo };
+            const tooltip = buildCurrencyTooltip(curr, dFrom, dTo);
+            const badgeStyle = getCurrencyBadgeStyle(curr);
+
+            document.querySelectorAll(`.req-curr-${cleanId}`).forEach(el => {
+              el.className = `req-curr-badge req-curr-${cleanId} px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide border ${badgeStyle} inline-flex items-center gap-1 cursor-help`;
+              el.title = tooltip;
+              el.textContent = curr;
+              el.classList.remove('hidden');
+            });
+          }
+        }
+        showDetailModal(title, data);
+      };
+
       // 1. Primary Maintenance API: /api/v1/Maintenance/GetStatementReqDataFromDS/{tenantId}/{id}
       try {
         const maintReq = await fetchApi(`/api/v1/Maintenance/GetStatementReqDataFromDS/${config.tenantId}/${cleanId}`, 'GET');
-        showDetailModal(title, maintReq);
+        processAndShow(maintReq);
         return;
       } catch (err1) {
         // Silent fallback
@@ -3225,13 +3368,13 @@
       // 2. Secondary Maintenance API: /api/v1/Maintenance/GetFile/{tenantId}/{id}
       try {
         const maintFile = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${cleanId}`, 'GET');
-        showDetailModal(title, maintFile);
+        processAndShow(maintFile);
         return;
       } catch (err2) {
         // 3. Fallback to Utility API: /api/v1/Utility/GetReqDataFromDS/{id}
         try {
           const reqData = await fetchApi(`/api/v1/Utility/GetReqDataFromDS/${cleanId}`, 'GET');
-          showDetailModal(title, reqData);
+          processAndShow(reqData);
           return;
         } catch (err3) {
           logConsole(`Všechny pokusy o načtení požadavku ${cleanId} selhaly.`, err3.message);
@@ -3431,7 +3574,13 @@
             </div>
           </td>
           <td class="p-3 font-medium">${item.companyName || '-'}</td>
-          <td class="p-3 font-mono text-xs">${item.bankAccount || '-'} <span class="text-gray-500">(${item.bankName || ''})</span></td>
+          <td class="p-3 font-mono text-xs">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span>${item.bankAccount || '-'}</span>
+              <span class="text-gray-500">(${item.bankName || ''})</span>
+              ${renderCurrencyBadgeHtml(item)}
+            </div>
+          </td>
           <td class="p-3 text-xs text-gray-400">${item.date ? new Date(item.date).toLocaleString('cs-CZ') : '-'}</td>
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
           <td class="p-3 text-center">${countBadgeHtml}</td>
@@ -3474,7 +3623,13 @@
             </div>
           </td>
           <td class="p-3 font-medium">${item.companyName || '-'}</td>
-          <td class="p-3 font-mono text-xs">${item.bankAccount || '-'} <span class="text-gray-500">(${item.bankName || ''})</span></td>
+          <td class="p-3 font-mono text-xs">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span>${item.bankAccount || '-'}</span>
+              <span class="text-gray-500">(${item.bankName || ''})</span>
+              ${renderCurrencyBadgeHtml(item)}
+            </div>
+          </td>
           <td class="p-3 text-xs text-gray-400">${item.date ? new Date(item.date).toLocaleString('cs-CZ') : '-'}</td>
           <td class="p-3 font-mono text-xs"><span class="px-2 py-0.5 rounded font-semibold border btn-action-amber">${item.typeLocalized || item.type || '-'}</span></td>
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
@@ -3565,7 +3720,12 @@
           <td class="p-3 font-mono text-xs"><span class="px-2 py-0.5 rounded font-semibold border btn-action-amber">${item.typeLocalized || item.type || '-'}</span></td>
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
           <td class="p-3 text-center">${countBadgeHtml}</td>
-          <td class="p-3 font-mono text-xs text-gray-400">${item.iban || item.bankAccount || '-'}</td>
+          <td class="p-3 font-mono text-xs">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-gray-300 font-mono">${item.iban || item.bankAccount || '-'}</span>
+              ${renderCurrencyBadgeHtml(item)}
+            </div>
+          </td>
           <td class="p-3 flex items-center gap-1.5">
             ${hasRequest ? `<button onclick="openItemModal('erp', ${index}, 'request')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-code"></i> Požadavek</button>` : ''}
             ${hasResponse ? `<button onclick="openItemModal('erp', ${index}, 'response')" title="Načíst odpověď BankApp pro ERP" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-reply"></i> Odpověď</button>` : ''}
