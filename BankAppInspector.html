@@ -834,11 +834,12 @@
                 <th class="p-3">Stav</th>
                 <th class="p-3 text-center">Počet výpisů</th>
                 <th class="p-3">IBAN / Účet</th>
+                <th class="p-3 text-center">Měna</th>
                 <th class="p-3">Akce (Payload / Odpověď)</th>
               </tr>
             </thead>
             <tbody id="gridErpBody" class="divide-y divide-gray-800/60 text-gray-300">
-              <tr><td colspan="9" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva. Zadejte Tenant ID v horní liště.</td></tr>
+              <tr><td colspan="10" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva. Zadejte Tenant ID v horní liště.</td></tr>
             </tbody>
           </table>
         </div>
@@ -904,15 +905,16 @@
                 <th class="p-3">Kód</th>
                 <th class="p-3">Firma</th>
                 <th class="p-3">Banka / Účet</th>
+                <th class="p-3 text-center">Měna</th>
                 <th class="p-3">Datum</th>
                 <th class="p-3">Stav</th>
-                <th class="p-3">Počet výpisů</th>
+                <th class="p-3 text-center">Počet výpisů</th>
                 <th class="p-3">Ref ID (Propojení)</th>
                 <th class="p-3">Dokumenty / Akce</th>
               </tr>
             </thead>
             <tbody id="gridStatementsBody" class="divide-y divide-gray-800/60 text-gray-300">
-              <tr><td colspan="8" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva. Zadejte Tenant ID v horní liště.</td></tr>
+              <tr><td colspan="9" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva. Zadejte Tenant ID v horní liště.</td></tr>
             </tbody>
           </table>
         </div>
@@ -967,6 +969,7 @@
                 <th class="p-3">Kód</th>
                 <th class="p-3">Firma</th>
                 <th class="p-3">Banka / Účet</th>
+                <th class="p-3 text-center">Měna</th>
                 <th class="p-3">Datum</th>
                 <th class="p-3">Typ</th>
                 <th class="p-3">Stav</th>
@@ -975,7 +978,7 @@
               </tr>
             </thead>
             <tbody id="gridBankMessagesBody" class="divide-y divide-gray-800/60 text-gray-300">
-              <tr><td colspan="8" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva.</td></tr>
+              <tr><td colspan="9" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná zpráva.</td></tr>
             </tbody>
           </table>
         </div>
@@ -1814,13 +1817,13 @@
       const fallbackKey = item.code ? `req-curr-${item.code}` : '';
 
       if (!currency) {
-        return `<span class="req-curr-badge ${classKey} ${fallbackKey} hidden"></span>`;
+        return `<span class="req-curr-badge ${classKey} ${fallbackKey} text-gray-600 font-mono text-xs">-</span>`;
       }
 
       const tooltip = buildCurrencyTooltip(currency, dateFrom, dateTo);
       const badgeStyle = getCurrencyBadgeStyle(currency);
 
-      return `<span class="req-curr-badge ${classKey} ${fallbackKey} px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide border ${badgeStyle} inline-flex items-center gap-1 cursor-help" title="${escapeHtml(tooltip)}">${escapeHtml(currency)}</span>`;
+      return `<span class="req-curr-badge ${classKey} ${fallbackKey} px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wide border ${badgeStyle} inline-flex items-center gap-1 cursor-help" title="${escapeHtml(tooltip)}">${escapeHtml(currency)}</span>`;
     }
 
     async function scanStatementRequests(items) {
@@ -1868,10 +1871,9 @@
                   .concat(item.requestReferenceId ? Array.from(document.querySelectorAll(`.req-curr-${item.requestReferenceId}`)) : []);
 
                 badgeEls.forEach(el => {
-                  el.className = `req-curr-badge req-curr-${reqId} px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide border ${badgeStyle} inline-flex items-center gap-1 cursor-help`;
+                  el.className = `req-curr-badge req-curr-${reqId} px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wide border ${badgeStyle} inline-flex items-center gap-1 cursor-help`;
                   el.title = tooltip;
                   el.textContent = curr;
-                  el.classList.remove('hidden');
                 });
               }
             } else {
@@ -2041,9 +2043,9 @@
       const tbodyBank = document.getElementById('gridBankMessagesBody');
       const tbodyPay = document.getElementById('gridPaymentsBody');
 
-      if (tbodyErp) tbodyErp.innerHTML = lockedHtml(9, 'ERP Požadavky');
-      if (tbodyStmt) tbodyStmt.innerHTML = lockedHtml(8, 'Výpisy');
-      if (tbodyBank) tbodyBank.innerHTML = lockedHtml(8, 'Bankovní Zprávy');
+      if (tbodyErp) tbodyErp.innerHTML = lockedHtml(10, 'ERP Požadavky');
+      if (tbodyStmt) tbodyStmt.innerHTML = lockedHtml(9, 'Výpisy');
+      if (tbodyBank) tbodyBank.innerHTML = lockedHtml(9, 'Bankovní Zprávy');
       if (tbodyPay) tbodyPay.innerHTML = lockedHtml(7, 'Dávkové Příkazy');
 
       const cntErp = document.getElementById('cntErp');
@@ -3067,9 +3069,9 @@
       const tbodyBank = document.getElementById('gridBankMessagesBody');
       const tbodyPay = document.getElementById('gridPaymentsBody');
 
-      if (tbodyErp) tbodyErp.innerHTML = loadingHtml(9, 'ERP Požadavky');
-      if (tbodyStmt) tbodyStmt.innerHTML = loadingHtml(8, 'Výpisy');
-      if (tbodyBank) tbodyBank.innerHTML = loadingHtml(8, 'Bankovní Zprávy');
+      if (tbodyErp) tbodyErp.innerHTML = loadingHtml(10, 'ERP Požadavky');
+      if (tbodyStmt) tbodyStmt.innerHTML = loadingHtml(9, 'Výpisy');
+      if (tbodyBank) tbodyBank.innerHTML = loadingHtml(9, 'Bankovní Zprávy');
       if (tbodyPay) tbodyPay.innerHTML = loadingHtml(7, 'Dávkové Příkazy');
     }
 
@@ -3346,10 +3348,9 @@
             const badgeStyle = getCurrencyBadgeStyle(curr);
 
             document.querySelectorAll(`.req-curr-${cleanId}`).forEach(el => {
-              el.className = `req-curr-badge req-curr-${cleanId} px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide border ${badgeStyle} inline-flex items-center gap-1 cursor-help`;
+              el.className = `req-curr-badge req-curr-${cleanId} px-2 py-0.5 rounded text-[11px] font-mono font-bold tracking-wide border ${badgeStyle} inline-flex items-center gap-1 cursor-help`;
               el.title = tooltip;
               el.textContent = curr;
-              el.classList.remove('hidden');
             });
           }
         }
@@ -3555,7 +3556,7 @@
       if (cntEl) cntEl.textContent = items ? items.length : 0;
 
       if (!items || items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-gray-500">Žádné zprávy o výpisech pro zvolený filtr a Tenant ID.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-gray-500">Žádné zprávy o výpisech pro zvolený filtr a Tenant ID.</td></tr>`;
         return;
       }
 
@@ -3574,13 +3575,8 @@
             </div>
           </td>
           <td class="p-3 font-medium">${item.companyName || '-'}</td>
-          <td class="p-3 font-mono text-xs">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span>${item.bankAccount || '-'}</span>
-              <span class="text-gray-500">(${item.bankName || ''})</span>
-              ${renderCurrencyBadgeHtml(item)}
-            </div>
-          </td>
+          <td class="p-3 font-mono text-xs">${item.bankAccount || '-'} <span class="text-gray-500">(${item.bankName || ''})</span></td>
+          <td class="p-3 text-center">${renderCurrencyBadgeHtml(item)}</td>
           <td class="p-3 text-xs text-gray-400">${item.date ? new Date(item.date).toLocaleString('cs-CZ') : '-'}</td>
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
           <td class="p-3 text-center">${countBadgeHtml}</td>
@@ -3610,7 +3606,7 @@
       if (cntEl) cntEl.textContent = items ? items.length : 0;
 
       if (!items || items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-gray-500">Žádné bankovní zprávy pro zvolený filtr.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-gray-500">Žádné bankovní zprávy pro zvolený filtr.</td></tr>`;
         return;
       }
 
@@ -3623,13 +3619,8 @@
             </div>
           </td>
           <td class="p-3 font-medium">${item.companyName || '-'}</td>
-          <td class="p-3 font-mono text-xs">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span>${item.bankAccount || '-'}</span>
-              <span class="text-gray-500">(${item.bankName || ''})</span>
-              ${renderCurrencyBadgeHtml(item)}
-            </div>
-          </td>
+          <td class="p-3 font-mono text-xs">${item.bankAccount || '-'} <span class="text-gray-500">(${item.bankName || ''})</span></td>
+          <td class="p-3 text-center">${renderCurrencyBadgeHtml(item)}</td>
           <td class="p-3 text-xs text-gray-400">${item.date ? new Date(item.date).toLocaleString('cs-CZ') : '-'}</td>
           <td class="p-3 font-mono text-xs"><span class="px-2 py-0.5 rounded font-semibold border btn-action-amber">${item.typeLocalized || item.type || '-'}</span></td>
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
@@ -3685,7 +3676,7 @@
       if (cntEl) cntEl.textContent = items ? items.length : 0;
 
       if (!items || items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-gray-500">Žádné ERP zprávy pro zvolený filtr a Tenant ID.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="p-6 text-center text-gray-500">Žádné ERP zprávy pro zvolený filtr a Tenant ID.</td></tr>`;
         return;
       }
 
@@ -3720,12 +3711,8 @@
           <td class="p-3 font-mono text-xs"><span class="px-2 py-0.5 rounded font-semibold border btn-action-amber">${item.typeLocalized || item.type || '-'}</span></td>
           <td class="p-3">${renderStateBadge(item.state, item.stateLocalized)}</td>
           <td class="p-3 text-center">${countBadgeHtml}</td>
-          <td class="p-3 font-mono text-xs">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span class="text-gray-300 font-mono">${item.iban || item.bankAccount || '-'}</span>
-              ${renderCurrencyBadgeHtml(item)}
-            </div>
-          </td>
+          <td class="p-3 font-mono text-xs text-gray-300">${item.iban || item.bankAccount || '-'}</td>
+          <td class="p-3 text-center">${renderCurrencyBadgeHtml(item)}</td>
           <td class="p-3 flex items-center gap-1.5">
             ${hasRequest ? `<button onclick="openItemModal('erp', ${index}, 'request')" title="Načíst požadavek z DataService" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-amber"><i class="fa-solid fa-file-code"></i> Požadavek</button>` : ''}
             ${hasResponse ? `<button onclick="openItemModal('erp', ${index}, 'response')" title="Načíst odpověď BankApp pro ERP" class="px-2.5 py-1 text-xs rounded font-medium flex items-center gap-1 btn-action-emerald"><i class="fa-solid fa-reply"></i> Odpověď</button>` : ''}
