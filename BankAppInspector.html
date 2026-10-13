@@ -786,9 +786,11 @@
           <!-- Dynamic Filters & Pagination for ERP Messages -->
           <div class="flex flex-wrap items-center gap-3" onclick="event.stopPropagation()">
             <select id="filterTypeErp" onchange="applyFiltersErp()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-amber-500 focus:outline-none focus:border-amber-500 font-medium">
-              <option value="ALL">Všechny typy (Platby i Výpisy)</option>
-              <option value="Payment">Pouze Platby / Příkazy</option>
-              <option value="Statement">Pouze Výpisy</option>
+              <option value="ALL">Všechny typy zpráv</option>
+              <option value="Payment">Příkazy / Platby (Payment)</option>
+              <option value="Statement">Výpisy (Statement)</option>
+              <option value="TransactionHistory">Transakce / Pohyby (TransactionHistory)</option>
+              <option value="Balance">Stav účtu / Zůstatky (Balance)</option>
             </select>
 
             <select id="filterStateErp" onchange="applyFiltersErp()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-amber-500">
@@ -931,6 +933,14 @@
           </button>
 
           <div class="flex flex-wrap items-center gap-3" onclick="event.stopPropagation()">
+            <select id="filterTypeBank" onchange="applyFiltersBankMsgs()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-indigo-400 focus:outline-none focus:border-indigo-500 font-medium">
+              <option value="ALL">Všechny typy zpráv</option>
+              <option value="Payment">Příkazy / Platby (Payment)</option>
+              <option value="Statement">Výpisy (Statement)</option>
+              <option value="TransactionHistory">Transakce / Pohyby (TransactionHistory)</option>
+              <option value="Balance">Stav účtu / Zůstatky (Balance)</option>
+            </select>
+
             <select id="filterStateBank" onchange="applyFiltersBankMsgs()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none">
               <option value="ALL">Všechny stavy</option>
               <option value="ERROR">Pouze CHYBY</option>
@@ -3323,6 +3333,7 @@
         logConsole("Maintenance Bank Zprávy selhaly", mErr.message);
         rawBankMessages = [];
       }
+      updateTypeFilterOptions('filterTypeBank', rawBankMessages);
       applyFiltersBankMsgs();
       scanStatementDateMismatches(rawBankMessages);
       scanStatementRequests(rawBankMessages);
@@ -3354,6 +3365,7 @@
         logConsole("Maintenance ERP Zprávy selhaly", mErr.message);
         rawErpMessages = [];
       }
+      updateTypeFilterOptions('filterTypeErp', rawErpMessages);
       applyFiltersErp();
       scanStatementDateMismatches(rawErpMessages);
       scanStatementRequests(rawErpMessages);
@@ -3537,11 +3549,13 @@
 
       // 2. Reset dropdown filters
       const filterTypeErp = document.getElementById('filterTypeErp');
+      const filterTypeBank = document.getElementById('filterTypeBank');
       const filterStateErp = document.getElementById('filterStateErp');
       const filterStateStmt = document.getElementById('filterStateStmt');
       const filterCountStmt = document.getElementById('filterCountStmt');
       const filterStateBank = document.getElementById('filterStateBank');
       if (filterTypeErp) filterTypeErp.value = 'ALL';
+      if (filterTypeBank) filterTypeBank.value = 'ALL';
       if (filterStateErp) filterStateErp.value = 'ALL';
       if (filterStateStmt) filterStateStmt.value = 'ALL';
       if (filterCountStmt) filterCountStmt.value = 'ALL';
@@ -3571,6 +3585,59 @@
     }
 
     // Dynamic Filter Handlers
+    function matchesMessageType(item, filterValue) {
+      if (!filterValue || filterValue === 'ALL') return true;
+      const rawType = String(item.type || '').trim().toLowerCase();
+      const locType = String(item.typeLocalized || '').trim().toLowerCase();
+      const combined = `${rawType} ${locType}`;
+      const f = filterValue.toLowerCase();
+
+      if (f === 'payment') {
+        return combined.includes('payment') || combined.includes('platb') || combined.includes('příkaz') || combined.includes('prikaz');
+      }
+      if (f === 'statement') {
+        return combined.includes('statement') || combined.includes('výpis') || combined.includes('vypis');
+      }
+      if (f === 'transactionhistory') {
+        return combined.includes('transaction') || combined.includes('transakc') || combined.includes('pohyb');
+      }
+      if (f === 'balance') {
+        return combined.includes('balance') || combined.includes('stav') || combined.includes('zůstat') || combined.includes('zustat');
+      }
+      return combined.includes(f);
+    }
+
+    function updateTypeFilterOptions(selectId, items) {
+      const select = document.getElementById(selectId);
+      if (!select || !Array.isArray(items)) return;
+
+      const currentVal = select.value;
+      const standardKeys = new Set(['all', 'payment', 'statement', 'transactionhistory', 'balance']);
+
+      // Remove previously appended dynamic options
+      select.querySelectorAll('.dynamic-type-opt').forEach(opt => opt.remove());
+
+      const extraTypes = new Set();
+      for (const item of items) {
+        const t = (item && item.type) ? String(item.type).trim() : null;
+        if (t && !standardKeys.has(t.toLowerCase())) {
+          extraTypes.add(t);
+        }
+      }
+
+      for (const extra of extraTypes) {
+        const opt = document.createElement('option');
+        opt.value = extra;
+        opt.className = 'dynamic-type-opt';
+        opt.textContent = `${extra} (jiný typ)`;
+        select.appendChild(opt);
+      }
+
+      if (currentVal && [...select.options].some(o => o.value === currentVal)) {
+        select.value = currentVal;
+      }
+    }
+
     function applyFiltersStatements() {
       const stateFilter = document.getElementById('filterStateStmt').value;
       const countFilter = document.getElementById('filterCountStmt') ? document.getElementById('filterCountStmt').value : 'ALL';
@@ -3597,14 +3664,16 @@
     }
 
     function applyFiltersBankMsgs() {
+      const typeFilter = document.getElementById('filterTypeBank') ? document.getElementById('filterTypeBank').value : 'ALL';
       const stateFilter = document.getElementById('filterStateBank').value;
       const search = document.getElementById('searchBank').value.toLowerCase();
 
       const filtered = rawBankMessages.filter(item => {
+        const matchesType = matchesMessageType(item, typeFilter);
         const matchesState = checkStateMatch(item, stateFilter);
         const matchesSearch = !search || JSON.stringify(item).toLowerCase().includes(search);
         const matchesDate = isItemInDateRange(item);
-        return matchesState && matchesSearch && matchesDate;
+        return matchesType && matchesState && matchesSearch && matchesDate;
       });
 
       currentFilteredBank = filtered;
@@ -3612,27 +3681,15 @@
     }
 
     function applyFiltersErp() {
-      const typeFilter = document.getElementById('filterTypeErp').value;
+      const typeFilter = document.getElementById('filterTypeErp') ? document.getElementById('filterTypeErp').value : 'ALL';
       const stateFilter = document.getElementById('filterStateErp').value;
       const search = document.getElementById('searchErp').value.toLowerCase();
 
       const filtered = rawErpMessages.filter(item => {
-        // Type filter match
-        let matchesType = true;
-        if (typeFilter !== 'ALL') {
-          const t = String(item.type || item.typeLocalized || '').toLowerCase();
-          matchesType = t.includes(typeFilter.toLowerCase());
-        }
-
-        // State filter match
+        const matchesType = matchesMessageType(item, typeFilter);
         const matchesState = checkStateMatch(item, stateFilter);
-
-        // Search match
         const matchesSearch = !search || JSON.stringify(item).toLowerCase().includes(search);
-
-        // Date match
         const matchesDate = isItemInDateRange(item);
-
         return matchesType && matchesState && matchesSearch && matchesDate;
       });
 
@@ -3827,6 +3884,10 @@
         // Switch to ERP tab
         switchTab('tab-erp');
         ensureSectionOpen('secBodyErp');
+        const fTypeErp = document.getElementById('filterTypeErp');
+        if (fTypeErp && fTypeErp.value !== 'ALL') fTypeErp.value = 'ALL';
+        const fStateErp = document.getElementById('filterStateErp');
+        if (fStateErp && fStateErp.value !== 'ALL') fStateErp.value = 'ALL';
         const inp = document.getElementById('searchErp');
         if (inp) inp.value = cleanRef;
         onSearchInput('searchErp', 'clearErp', applyFiltersErp);
@@ -3836,6 +3897,10 @@
         switchTab('tab-statements');
         ensureSectionOpen('secBodyStatements');
         ensureSectionOpen('secBodyBank');
+        const fTypeBank = document.getElementById('filterTypeBank');
+        if (fTypeBank && fTypeBank.value !== 'ALL') fTypeBank.value = 'ALL';
+        const fStateBank = document.getElementById('filterStateBank');
+        if (fStateBank && fStateBank.value !== 'ALL') fStateBank.value = 'ALL';
         const inpStmt = document.getElementById('searchStmt');
         const inpBank = document.getElementById('searchBank');
         if (inpStmt) inpStmt.value = cleanRef;
