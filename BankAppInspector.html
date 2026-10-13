@@ -1461,6 +1461,14 @@
     function indexRequestData(reqId, reqData) {
       if (!reqData) return null;
       const cleanId = String(reqId).trim();
+
+      // If reqData is a string or wrapped in _rawContent, extract the JSON object
+      if (typeof reqData === 'string' || (reqData && reqData._rawContent)) {
+        const extracted = extractJsonAndHttpInfo(reqData);
+        if (extracted.obj) reqData = extracted.obj;
+      }
+      if (typeof reqData !== 'object' || reqData === null) return null;
+
       const curr = reqData.currencyCode || reqData.currency || reqData.currency_code || (reqData.payload && reqData.payload.currency) || null;
       const dFrom = reqData.dateFrom || reqData.fromDate || reqData.date_from || null;
       const dTo = reqData.dateTo || reqData.toDate || reqData.date_to || null;
@@ -1513,22 +1521,92 @@
       return statementReqCache[cleanId] || null;
     }
 
+    function extractJsonAndHttpInfo(content) {
+      let obj = null;
+      let httpPrefix = '';
+      let rawStr = '';
+
+      if (!content) {
+        return { obj: null, httpPrefix: '', rawStr: '' };
+      }
+
+      // Handle fetchApi invalidJson wrapper with rawContent
+      if (typeof content === 'object') {
+        if (content._rawContent && typeof content._rawContent === 'string') {
+          content = content._rawContent;
+        } else {
+          obj = content;
+          rawStr = JSON.stringify(content);
+          return { obj, httpPrefix: '', rawStr };
+        }
+      }
+
+      if (typeof content === 'string') {
+        let trimmed = content.trim();
+        rawStr = trimmed;
+
+        // Try direct parse as JSON object or array
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object') {
+            obj = parsed;
+            return { obj, httpPrefix: '', rawStr: trimmed };
+          } else if (typeof parsed === 'string') {
+            // String was a JSON-encoded string like "\"HTTP 400 - ...\""
+            trimmed = parsed.trim();
+            rawStr = trimmed;
+          }
+        } catch (e) {}
+
+        // Check for HTTP status prefix + JSON candidate, e.g. "HTTP 400 - \n{...}"
+        const firstJsonIdx = trimmed.search(/[\{\[]/);
+        if (firstJsonIdx !== -1) {
+          httpPrefix = trimmed.substring(0, firstJsonIdx).trim();
+          const jsonCandidate = trimmed.substring(firstJsonIdx).trim();
+          const lastJsonIdx = Math.max(jsonCandidate.lastIndexOf('}'), jsonCandidate.lastIndexOf(']'));
+          if (lastJsonIdx !== -1) {
+            const candidateStr = jsonCandidate.substring(0, lastJsonIdx + 1);
+            try {
+              obj = JSON.parse(candidateStr);
+            } catch (e2) {}
+          }
+        } else {
+          // No JSON found, might be raw HTTP error like "HTTP 400 - Bad Request"
+          httpPrefix = trimmed;
+        }
+      }
+
+      return { obj, httpPrefix, rawStr };
+    }
+
+    function isItemInErrorState(item) {
+      if (!item) return false;
+      const s = String(item.state || '').trim().toLowerCase();
+      const loc = String(item.stateLocalized || item.statusLocalized || '').trim().toLowerCase();
+      const rawState = item.state !== undefined ? item.state : item.authorizationStatus;
+      return s === 'error' || s === 'fail' || s === 'failed'
+        || loc === 'error' || loc.includes('chyb') || loc.includes('selh')
+        || rawState === 3 || rawState === 4;
+    }
+
     function extractTxIdFromParams(params) {
       if (!params || typeof params !== 'object') return null;
+
+      // Pass 1: explicit instructionIdentification or paymentIdentifier in value or key
       for (const [k, v] of Object.entries(params)) {
         const val = String(v || '').trim();
         const key = String(k || '').trim().toLowerCase();
-
-        // 1. Matches "instructionIdentification:35265b33f88445d784b5846665159c64"
-        const m = val.match(/instructionIdentification\s*:\s*([a-zA-Z0-9_-]+)/i);
+        const m = val.match(/(?:instructionIdentification|paymentIdentifier|instructionId)\s*:\s*([a-zA-Z0-9_-]+)/i);
         if (m && m[1]) return m[1].trim();
-
-        // 2. Key contains instructionIdentification / paymentIdentifier / instructionId
         if (key.includes('instructionidentification') || key.includes('paymentidentifier') || key.includes('instructionid')) {
-          if (val) return val;
+          const m2 = val.match(/([a-zA-Z0-9_-]+)/);
+          if (m2 && m2[1]) return m2[1].trim();
         }
+      }
 
-        // 3. Value is a direct 32-hex or UUID string
+      // Pass 2: direct 32-hex or UUID string
+      for (const [k, v] of Object.entries(params)) {
+        const val = String(v || '').trim();
         if (/^[a-fA-F0-9]{32}$/.test(val) || /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/.test(val)) {
           return val;
         }
@@ -1537,20 +1615,43 @@
     }
 
     function evaluateBankErrors(content, item = null) {
-      if (!content || typeof content !== 'object') return null;
+      if (!content) return null;
+
+      const { obj, httpPrefix, rawStr } = extractJsonAndHttpInfo(content);
+
+      // Check HTTP status error code in prefix or rawStr (e.g. HTTP 400, HTTP 500, etc.)
+      const httpMatch = (httpPrefix || rawStr).match(/HTTP(?:\s*-\s*|\s+)?(\d{3})/i)
+        || (httpPrefix || rawStr).match(/\b(4\d{2}|5\d{2})\b/);
+      const isHttpError = !!httpMatch;
+      const httpCode = httpMatch ? (httpMatch[1] || httpMatch[0]) : null;
 
       let errors = [];
-      if (Array.isArray(content.errors)) {
-        errors = content.errors;
-      } else if (Array.isArray(content) && content.length > 0 && (content[0].error || content[0].message)) {
-        errors = content;
-      } else if (content.errors && typeof content.errors === 'object') {
-        errors = Object.values(content.errors);
-      } else if (content.error) {
-        errors = [typeof content.error === 'object' ? content.error : { error: content.error, message: content.message || content.error }];
+      if (obj && typeof obj === 'object') {
+        if (Array.isArray(obj.errors)) {
+          errors = obj.errors;
+        } else if (Array.isArray(obj) && obj.length > 0 && (obj[0].error || obj[0].message || obj[0].code)) {
+          errors = obj;
+        } else if (obj.errors && typeof obj.errors === 'object') {
+          errors = Object.values(obj.errors);
+        } else if (obj.error) {
+          errors = [typeof obj.error === 'object' ? obj.error : { error: obj.error, message: obj.message || obj.error }];
+        } else if (obj.message && isHttpError) {
+          errors = [{ error: `HTTP ${httpCode || 400}`, message: obj.message }];
+        } else if (obj.title && isHttpError) {
+          errors = [{ error: obj.status ? `HTTP ${obj.status}` : (httpCode ? `HTTP ${httpCode}` : 'Chyba'), message: obj.detail || obj.title }];
+        }
       }
 
-      if (!errors || errors.length === 0) {
+      // If no JSON error list found, but we have an HTTP error in prefix or raw text
+      if (errors.length === 0 && isHttpError) {
+        const cleanMsg = (httpPrefix || rawStr).replace(/\r?\n.*/s, '').trim();
+        errors = [{
+          error: `HTTP ${httpCode}`,
+          message: cleanMsg || `Chyba bankovního serveru (HTTP ${httpCode})`
+        }];
+      }
+
+      if (errors.length === 0 && !isHttpError) {
         return null;
       }
 
@@ -1591,6 +1692,10 @@
 
       const lines = [];
 
+      if (httpCode) {
+        lines.push(`Chyba banky (HTTP ${httpCode}):`);
+      }
+
       if (charSetErrors.length > 0) {
         lines.push(`Chyba platby: Nesprávný znak ve zprávě pro banku (InvalidCharacterSet / RR10)`);
         charSetErrors.forEach((e, idx) => {
@@ -1608,14 +1713,16 @@
             if (p.amount) {
               lines.push(`  Částka: ${p.amount.toLocaleString('cs-CZ')} ${p.currency || 'CZK'}${p.variableSymbol ? ` | VS: ${p.variableSymbol}` : ''}`);
             }
-          } else if (e.txId) {
+          } else {
             lines.push(`• ${txPrefix}`);
+            if (e.scope) lines.push(`  Pole: ${e.scope}`);
+            if (e.msg && e.msg !== 'InvalidCharacterSet') lines.push(`  Detail: ${e.msg}`);
           }
         });
       }
 
       if (accountExecErrors.length > 0) {
-        if (lines.length > 0) lines.push('');
+        if (charSetErrors.length > 0) lines.push('');
         lines.push(`Chyba platby: Z účtu není možné provádět platby (Payment cannot be executed from this account / NARR)`);
         lines.push(`• Počet neprovedených plateb: ${accountExecErrors.length}`);
         const sample = accountExecErrors.slice(0, 4);
@@ -1634,7 +1741,7 @@
       }
 
       if (otherErrors.length > 0) {
-        if (lines.length > 0) lines.push('');
+        if (charSetErrors.length > 0 || accountExecErrors.length > 0) lines.push('');
         otherErrors.forEach(e => {
           const errName = e.code ? `${e.code}: ` : '';
           lines.push(`Chyba z banky: ${errName}${e.msg || 'Neznámá chyba'}`);
@@ -1649,6 +1756,7 @@
         hasError: true,
         isMismatch: true,
         bankError: true,
+        httpCode,
         parsedErrors,
         tooltip,
         charSetErrors,
@@ -1658,7 +1766,24 @@
     }
 
     function evaluateStatementPayload(content, fallbackDate = null, item = null) {
+      const isItemErr = isItemInErrorState(item);
+
       if (!content) {
+        if (isItemErr) {
+          const errMsg = item.errorMessage || item.error || item.message || '';
+          return {
+            isMismatch: true,
+            dateMismatch: false,
+            periodMismatch: false,
+            jsonError: false,
+            bankError: true,
+            dateFrom: fallbackDate,
+            dateTo: fallbackDate,
+            period: null,
+            periodLabel: null,
+            tooltip: `Chyba zprávy: Záznam skončil ve stavu Chyba (Error)${errMsg ? ' - ' + errMsg : ''}`
+          };
+        }
         return {
           isMismatch: false,
           dateMismatch: false,
@@ -1673,7 +1798,26 @@
         };
       }
 
-      // Check for corrupted/invalid JSON or empty bank response
+      // 1. Extract JSON object and HTTP prefix if content is string or has _rawContent
+      const { obj, httpPrefix, rawStr } = extractJsonAndHttpInfo(content);
+
+      // 2. Check for Bank Errors in JSON or HTTP status (InvalidCharacterSet, NARR, HTTP 400, etc.)
+      const bankErrorInfo = evaluateBankErrors(content, item);
+      if (bankErrorInfo && bankErrorInfo.hasError) {
+        return {
+          isMismatch: true,
+          dateMismatch: false,
+          periodMismatch: false,
+          jsonError: false,
+          bankError: true,
+          dateFrom: fallbackDate,
+          dateTo: fallbackDate,
+          tooltip: bankErrorInfo.tooltip,
+          bankErrorInfo
+        };
+      }
+
+      // 3. Check for corrupted/invalid JSON or empty bank response
       if (typeof content === 'object' && (content._isInvalidJson || content._isEmptyResponse || content._errorMessage)) {
         const msg = content._errorMessage || 'Neplatný nebo prázdný JSON soubor od banky';
         return {
@@ -1705,9 +1849,9 @@
         };
       }
 
-      // Check for Bank Errors in JSON (InvalidCharacterSet, NARR, etc.)
-      const bankErrorInfo = evaluateBankErrors(content, item);
-      if (bankErrorInfo && bankErrorInfo.hasError) {
+      // 4. If item itself is marked with Error state, never mark as OK
+      if (isItemErr) {
+        const errMsg = item.errorMessage || item.error || item.message || '';
         return {
           isMismatch: true,
           dateMismatch: false,
@@ -1716,14 +1860,15 @@
           bankError: true,
           dateFrom: fallbackDate,
           dateTo: fallbackDate,
-          tooltip: bankErrorInfo.tooltip,
-          bankErrorInfo
+          period: null,
+          periodLabel: null,
+          tooltip: `Chyba zprávy: Zpráva skončila ve stavu Chyba (Error)${errMsg ? ' - ' + errMsg : ''}`
         };
       }
 
-      // Check if this is a non-statement bank message (Payment, Balance, TransactionHistory) with no errors
+      // 5. Check if this is a non-statement bank message (Payment, Balance, TransactionHistory) with no errors
       const isStmt = (item && (String(item.type || item.typeLocalized || '').toLowerCase().includes('statement') || String(item.type || '').toLowerCase().includes('výpis')))
-        || (content && (content.accountStatements || content.statements || content.period));
+        || (obj && (obj.accountStatements || obj.statements || obj.period));
 
       if (!isStmt && item && item.type) {
         return {
@@ -1741,14 +1886,14 @@
       }
 
       let list = null;
-      if (Array.isArray(content)) {
-        list = content;
-      } else if (content && Array.isArray(content.accountStatements)) {
-        list = content.accountStatements;
-      } else if (content && Array.isArray(content.statements)) {
-        list = content.statements;
-      } else if (content && Array.isArray(content.payload)) {
-        list = content.payload;
+      if (Array.isArray(obj)) {
+        list = obj;
+      } else if (obj && Array.isArray(obj.accountStatements)) {
+        list = obj.accountStatements;
+      } else if (obj && Array.isArray(obj.statements)) {
+        list = obj.statements;
+      } else if (obj && Array.isArray(obj.payload)) {
+        list = obj.payload;
       }
 
       let isMismatch = false;
@@ -1779,10 +1924,10 @@
             }
           }
         }
-      } else if (content && typeof content === 'object') {
-        dFrom = content.dateFrom || content.fromDate || content.date_from || null;
-        dTo = content.dateTo || content.toDate || content.date_to || null;
-        periodVal = content.period || null;
+      } else if (obj && typeof obj === 'object') {
+        dFrom = obj.dateFrom || obj.fromDate || obj.date_from || null;
+        dTo = obj.dateTo || obj.toDate || obj.date_to || null;
+        periodVal = obj.period || null;
 
         if (dFrom && dTo && isCalendarDateMismatch(dFrom, dTo)) {
           dateMismatch = true;
@@ -1797,11 +1942,10 @@
       }
 
       // Regex fallback if needed
-      if (!dateMismatch && !periodMismatch && content) {
-        const raw = typeof content === 'string' ? content : JSON.stringify(content);
-        const fromM = raw.match(/"dateFrom"\s*:\s*"([^"]+)"/i);
-        const toM = raw.match(/"dateTo"\s*:\s*"([^"]+)"/i);
-        const perM = raw.match(/"period"\s*:\s*"([^"]+)"/i);
+      if (!dateMismatch && !periodMismatch && rawStr) {
+        const fromM = rawStr.match(/"dateFrom"\s*:\s*"([^"]+)"/i);
+        const toM = rawStr.match(/"dateTo"\s*:\s*"([^"]+)"/i);
+        const perM = rawStr.match(/"period"\s*:\s*"([^"]+)"/i);
 
         if (fromM && toM) {
           dFrom = dFrom || fromM[1];
@@ -1863,6 +2007,8 @@
 
     function checkDirectDateMismatch(item) {
       if (!item) return null;
+
+      // 1. Check if item has explicit errors
       if (item.errors) {
         const bankErr = evaluateBankErrors(item, item);
         if (bankErr && bankErr.hasError) {
@@ -1874,6 +2020,17 @@
           };
         }
       }
+
+      // 2. If item is in Error state, signal error immediately (never show misleading green checkmark)
+      if (isItemInErrorState(item)) {
+        const errMsg = item.errorMessage || item.error || item.message || '';
+        return {
+          isMismatch: true,
+          bankError: true,
+          tooltip: `Chyba zprávy: Zpráva je ve stavu Chyba (Error)${errMsg ? ' (' + errMsg + ')' : ''} - načítám detail odpovědi...`
+        };
+      }
+
       const hasPayload = item.accountStatements || item.statements || item.payload || (item.dateFrom && item.dateTo) || item.period;
       if (hasPayload) {
         return evaluateStatementPayload(item, item.date, item);
@@ -1950,6 +2107,7 @@
 
     function renderStatusIconHtml(key, status, item = null) {
       let content = `<span class="w-1.5 h-1.5 rounded-full bg-gray-700/40 inline-block" title="Načítám kontrolu zprávy..."></span>`;
+      let titleAttr = 'Načítám kontrolu zprávy...';
 
       if (status !== null && status !== undefined) {
         const isMismatch = typeof status === 'object' ? status.isMismatch : status;
@@ -1961,23 +2119,27 @@
           const defaultTooltip = (fromStr && toStr && fromStr !== toStr)
             ? `Upozornění: Vícedenní rozsah výpisu (${fromStr} – ${toStr})`
             : `Upozornění / Chyba zprávy`;
-          const titleText = escapeHtml(tooltip || defaultTooltip);
-          content = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${titleText}"></i>`;
+          titleAttr = tooltip || defaultTooltip;
+          const escapedTitle = escapeHtml(titleAttr);
+          content = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${escapedTitle}"></i>`;
         } else if (isMismatch === false) {
           const dateText = fromStr ? ` (${fromStr})` : '';
           const defaultTooltip = `OK: Záznam v pořádku${dateText}`;
-          const titleText = escapeHtml(tooltip || defaultTooltip);
-          content = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${titleText}"></i>`;
+          titleAttr = tooltip || defaultTooltip;
+          const escapedTitle = escapeHtml(titleAttr);
+          content = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${escapedTitle}"></i>`;
         }
       }
 
       const keyClasses = [
         key ? `date-warn-${key}` : '',
         item && item.code ? `date-warn-${item.code}` : '',
-        item && item.requestReferenceId ? `date-warn-${item.requestReferenceId}` : ''
+        item && item.requestReferenceId ? `date-warn-${item.requestReferenceId}` : '',
+        item && item.responseJsonId ? `date-warn-${item.responseJsonId}` : '',
+        item && item.statementJsonFileReferenceId ? `date-warn-${item.statementJsonFileReferenceId}` : ''
       ].filter(Boolean).join(' ');
 
-      return `<span id="dateWarn-${key}" class="date-warn-icon ${keyClasses} w-5 h-5 flex-shrink-0 flex items-center justify-center inline-block cursor-help">${content}</span>`;
+      return `<span id="dateWarn-${key}" class="date-warn-icon ${keyClasses} w-5 h-5 flex-shrink-0 flex items-center justify-center inline-block cursor-help" title="${escapeHtml(titleAttr)}">${content}</span>`;
     }
 
     async function scanStatementDateMismatches(items) {
@@ -2005,15 +2167,16 @@
             if (info.bankError && info.bankErrorInfo) {
               const missingTx = info.bankErrorInfo.parsedErrors.some(e => e.txId && !paymentTxCache[e.txId.toLowerCase()]);
               if (missingTx) {
-                const reqId = item.requestReferenceId || item.code;
-                if (reqId) {
-                  await ensurePaymentRequestCached(reqId);
-                  info = evaluateStatementPayload(fileContent, item.date, item);
+                if (item.requestReferenceId) await ensurePaymentRequestCached(item.requestReferenceId);
+                if (item.code && info.bankErrorInfo.parsedErrors.some(e => e.txId && !paymentTxCache[e.txId.toLowerCase()])) {
+                  await ensurePaymentRequestCached(item.code);
                 }
+                info = evaluateStatementPayload(fileContent, item.date, item);
               }
             }
 
             statementMismatchCache[key] = info;
+            if (fileId) statementMismatchCache[fileId] = info;
             if (item.code) statementMismatchCache[item.code] = info;
             if (item.requestReferenceId) statementMismatchCache[item.requestReferenceId] = info;
 
@@ -2027,21 +2190,26 @@
             const iconEls = selector ? Array.from(document.querySelectorAll(selector)) : [];
 
             iconEls.forEach(iconEl => {
+              const titleText = escapeHtml(info.tooltip);
+              iconEl.title = titleText;
               if (info.isMismatch) {
-                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${escapeHtml(info.tooltip)}"></i>`;
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${titleText}"></i>`;
               } else {
-                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${escapeHtml(info.tooltip)}"></i>`;
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${titleText}"></i>`;
               }
             });
           } catch (e) {
-            const isErr = /json|unexpected end|syntaxerror|failed to execute|http|network/i.test(e.message || '');
+            const isErr = isItemInErrorState(item) || /json|unexpected end|syntaxerror|failed to execute|http|network/i.test(e.message || '');
             const fallbackInfo = {
               isMismatch: isErr,
               dateFrom: item.date,
               dateTo: item.date,
-              tooltip: isErr ? `Chyba při načítání JSON souboru (${e.message})` : (item.date ? `OK: Záznam (${formatDateCz(item.date)})` : `OK: Záznam v pořádku`)
+              tooltip: isErr
+                ? (isItemInErrorState(item) ? `Chyba zprávy: Záznam je ve stavu Chyba (${e.message})` : `Chyba při načítání souboru (${e.message})`)
+                : (item.date ? `OK: Záznam (${formatDateCz(item.date)})` : `OK: Záznam v pořádku`)
             };
             statementMismatchCache[key] = fallbackInfo;
+            if (fileId) statementMismatchCache[fileId] = fallbackInfo;
             if (item.code) statementMismatchCache[item.code] = fallbackInfo;
             if (item.requestReferenceId) statementMismatchCache[item.requestReferenceId] = fallbackInfo;
 
@@ -2055,10 +2223,12 @@
             const iconEls = selector ? Array.from(document.querySelectorAll(selector)) : [];
 
             iconEls.forEach(iconEl => {
+              const titleText = escapeHtml(fallbackInfo.tooltip);
+              iconEl.title = titleText;
               if (fallbackInfo.isMismatch) {
-                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${escapeHtml(fallbackInfo.tooltip)}"></i>`;
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${titleText}"></i>`;
               } else {
-                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${escapeHtml(fallbackInfo.tooltip)}"></i>`;
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${titleText}"></i>`;
               }
             });
           }
@@ -3063,7 +3233,13 @@
     }
 
     function escapeHtml(str) {
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     function showDetailModal(title, jsonContent, evalResult = null) {
@@ -3754,33 +3930,43 @@
       const title = customTitle || `Detail Souboru (${fileId})`;
       try {
         const fileContent = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${fileId}`, 'GET');
+        const currentItem = (modalNavContext?.items && modalNavContext.currentIndex !== undefined)
+          ? modalNavContext.items[modalNavContext.currentIndex]
+          : null;
 
         // Inspect date & period mismatch and bank errors in loaded JSON file
-        let evalResult = evaluateStatementPayload(fileContent);
+        let evalResult = evaluateStatementPayload(fileContent, null, currentItem);
         if (evalResult.bankError && evalResult.bankErrorInfo) {
           const missingTx = evalResult.bankErrorInfo.parsedErrors.some(e => e.txId && !paymentTxCache[e.txId.toLowerCase()]);
-          if (missingTx && modalNavContext?.items && modalNavContext.currentIndex !== undefined) {
-            const currentItem = modalNavContext.items[modalNavContext.currentIndex];
-            const reqId = currentItem?.requestReferenceId || currentItem?.code;
-            if (reqId) {
-              await ensurePaymentRequestCached(reqId);
-              evalResult = evaluateStatementPayload(fileContent, null, currentItem);
+          if (missingTx && currentItem) {
+            if (currentItem.requestReferenceId) await ensurePaymentRequestCached(currentItem.requestReferenceId);
+            if (currentItem.code && evalResult.bankErrorInfo.parsedErrors.some(e => e.txId && !paymentTxCache[e.txId.toLowerCase()])) {
+              await ensurePaymentRequestCached(currentItem.code);
             }
+            evalResult = evaluateStatementPayload(fileContent, null, currentItem);
           }
         }
         statementMismatchCache[fileId] = evalResult;
+        if (currentItem?.code) statementMismatchCache[currentItem.code] = evalResult;
+        if (currentItem?.requestReferenceId) statementMismatchCache[currentItem.requestReferenceId] = evalResult;
 
         const selector = [
-          `.date-warn-${fileId}`
-        ].join(',');
+          fileId ? `.date-warn-${fileId}` : null,
+          currentItem?.code ? `.date-warn-${currentItem.code}` : null,
+          currentItem?.requestReferenceId ? `.date-warn-${currentItem.requestReferenceId}` : null
+        ].filter(Boolean).join(',');
 
-        document.querySelectorAll(selector).forEach(iconEl => {
-          if (evalResult.isMismatch) {
-            iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${escapeHtml(evalResult.tooltip)}"></i>`;
-          } else {
-            iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${escapeHtml(evalResult.tooltip)}"></i>`;
-          }
-        });
+        if (selector) {
+          document.querySelectorAll(selector).forEach(iconEl => {
+            const titleText = escapeHtml(evalResult.tooltip);
+            iconEl.title = titleText;
+            if (evalResult.isMismatch) {
+              iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${titleText}"></i>`;
+            } else {
+              iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${titleText}"></i>`;
+            }
+          });
+        }
 
         showDetailModal(title, fileContent, evalResult);
       } catch (err) {
