@@ -1446,19 +1446,220 @@
     }
 
     let statementMismatchCache = {};
+    let paymentTxCache = {};
 
-    function evaluateStatementPayload(content, fallbackDate = null) {
+    function indexRequestData(reqId, reqData) {
+      if (!reqData) return null;
+      const cleanId = String(reqId).trim();
+      const curr = reqData.currencyCode || reqData.currency || reqData.currency_code || (reqData.payload && reqData.payload.currency) || null;
+      const dFrom = reqData.dateFrom || reqData.fromDate || reqData.date_from || null;
+      const dTo = reqData.dateTo || reqData.toDate || reqData.date_to || null;
+
+      const paymentsList = (reqData.payload && Array.isArray(reqData.payload.payments))
+        ? reqData.payload.payments
+        : (Array.isArray(reqData.payments) ? reqData.payments : null);
+
+      if (paymentsList) {
+        for (const p of paymentsList) {
+          if (p && p.paymentIdentifier) {
+            paymentTxCache[String(p.paymentIdentifier).trim().toLowerCase()] = p;
+          }
+        }
+      }
+
+      const info = {
+        currencyCode: curr,
+        dateFrom: dFrom,
+        dateTo: dTo,
+        payments: paymentsList,
+        raw: reqData
+      };
+
+      statementReqCache[cleanId] = info;
+      return info;
+    }
+
+    async function ensurePaymentRequestCached(reqId) {
+      if (!reqId || !config.tenantId) return null;
+      const cleanId = String(reqId).trim();
+      if (statementReqCache[cleanId]?.payments) return statementReqCache[cleanId];
+
+      let reqData = null;
+      try {
+        reqData = await fetchApi(`/api/v1/Maintenance/GetStatementReqDataFromDS/${config.tenantId}/${cleanId}`, 'GET', null, true);
+      } catch (e1) {
+        try {
+          reqData = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${cleanId}`, 'GET', null, true);
+        } catch (e2) {
+          try {
+            reqData = await fetchApi(`/api/v1/Utility/GetReqDataFromDS/${cleanId}`, 'GET', null, true);
+          } catch (e3) {}
+        }
+      }
+
+      if (reqData && !reqData._isInvalidJson && !reqData._isEmptyResponse) {
+        return indexRequestData(cleanId, reqData);
+      }
+      return statementReqCache[cleanId] || null;
+    }
+
+    function extractTxIdFromParams(params) {
+      if (!params || typeof params !== 'object') return null;
+      for (const [k, v] of Object.entries(params)) {
+        const val = String(v || '').trim();
+        const key = String(k || '').trim().toLowerCase();
+
+        // 1. Matches "instructionIdentification:35265b33f88445d784b5846665159c64"
+        const m = val.match(/instructionIdentification\s*:\s*([a-zA-Z0-9_-]+)/i);
+        if (m && m[1]) return m[1].trim();
+
+        // 2. Key contains instructionIdentification / paymentIdentifier / instructionId
+        if (key.includes('instructionidentification') || key.includes('paymentidentifier') || key.includes('instructionid')) {
+          if (val) return val;
+        }
+
+        // 3. Value is a direct 32-hex or UUID string
+        if (/^[a-fA-F0-9]{32}$/.test(val) || /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/.test(val)) {
+          return val;
+        }
+      }
+      return null;
+    }
+
+    function evaluateBankErrors(content, item = null) {
+      if (!content || typeof content !== 'object') return null;
+
+      let errors = [];
+      if (Array.isArray(content.errors)) {
+        errors = content.errors;
+      } else if (Array.isArray(content) && content.length > 0 && (content[0].error || content[0].message)) {
+        errors = content;
+      } else if (content.errors && typeof content.errors === 'object') {
+        errors = Object.values(content.errors);
+      } else if (content.error) {
+        errors = [typeof content.error === 'object' ? content.error : { error: content.error, message: content.message || content.error }];
+      }
+
+      if (!errors || errors.length === 0) {
+        return null;
+      }
+
+      const parsedErrors = errors.map(err => {
+        const code = String(err.error || err.code || '').trim();
+        const msg = String(err.message || err.description || err.title || '').trim();
+        const scope = String(err.scope || '').trim();
+        const params = (err.parameters && typeof err.parameters === 'object') ? err.parameters : {};
+        const txId = extractTxIdFromParams(params);
+
+        let payment = null;
+        if (txId) {
+          payment = paymentTxCache[txId.toLowerCase()] || null;
+        }
+
+        const isCharSet = code.toUpperCase() === 'RR10'
+          || /invalidcharacterset|character|nesprávný znak|nepovolený znak/i.test(msg)
+          || /remittanceinformation/i.test(scope);
+
+        const isAccountExec = code.toUpperCase() === 'NARR'
+          || /cannot be executed from this account|nelze provést platbu/i.test(msg);
+
+        return {
+          code,
+          msg,
+          scope,
+          params,
+          txId,
+          payment,
+          isCharSet,
+          isAccountExec
+        };
+      });
+
+      const charSetErrors = parsedErrors.filter(e => e.isCharSet);
+      const accountExecErrors = parsedErrors.filter(e => e.isAccountExec);
+      const otherErrors = parsedErrors.filter(e => !e.isCharSet && !e.isAccountExec);
+
+      const lines = [];
+
+      if (charSetErrors.length > 0) {
+        lines.push(`Chyba platby: Nesprávný znak ve zprávě pro banku (InvalidCharacterSet / RR10)`);
+        charSetErrors.forEach((e, idx) => {
+          const p = e.payment;
+          const txPrefix = e.txId ? `Transakce ${e.txId}` : `Chyba #${idx + 1}`;
+          if (p && p.message) {
+            let charNote = '';
+            if (/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/.test(p.message)) {
+              charNote = ' (obsahuje nedělitelnou mezeru / speciální mezeru)';
+            } else if (/[^\x20-\x7E\xA0-\xFF]/.test(p.message)) {
+              charNote = ' (obsahuje nepovolený nestandardní znak)';
+            }
+            lines.push(`• ${txPrefix}:`);
+            lines.push(`  Zpráva pro příjemce: "${p.message}"${charNote}`);
+            if (p.amount) {
+              lines.push(`  Částka: ${p.amount.toLocaleString('cs-CZ')} ${p.currency || 'CZK'}${p.variableSymbol ? ` | VS: ${p.variableSymbol}` : ''}`);
+            }
+          } else if (e.txId) {
+            lines.push(`• ${txPrefix}`);
+          }
+        });
+      }
+
+      if (accountExecErrors.length > 0) {
+        if (lines.length > 0) lines.push('');
+        lines.push(`Chyba platby: Z účtu není možné provádět platby (Payment cannot be executed from this account / NARR)`);
+        lines.push(`• Počet neprovedených plateb: ${accountExecErrors.length}`);
+        const sample = accountExecErrors.slice(0, 4);
+        sample.forEach(e => {
+          const p = e.payment;
+          const shortTx = e.txId ? `${e.txId.substring(0, 16)}...` : 'Neznámé ID';
+          if (p && p.message) {
+            lines.push(`  - Transakce ${shortTx}: "${p.message}" (${p.amount ? p.amount.toLocaleString('cs-CZ') + ' ' + (p.currency || 'CZK') : ''})`);
+          } else if (e.txId) {
+            lines.push(`  - Transakce ID: ${e.txId}`);
+          }
+        });
+        if (accountExecErrors.length > 4) {
+          lines.push(`  - ... a dalších ${accountExecErrors.length - 4} plateb`);
+        }
+      }
+
+      if (otherErrors.length > 0) {
+        if (lines.length > 0) lines.push('');
+        otherErrors.forEach(e => {
+          const errName = e.code ? `${e.code}: ` : '';
+          lines.push(`Chyba z banky: ${errName}${e.msg || 'Neznámá chyba'}`);
+          if (e.txId) lines.push(`• Transakce ID: ${e.txId}`);
+          if (e.scope) lines.push(`• Oblast: ${e.scope}`);
+        });
+      }
+
+      const tooltip = lines.join('\n');
+
+      return {
+        hasError: true,
+        isMismatch: true,
+        bankError: true,
+        parsedErrors,
+        tooltip,
+        charSetErrors,
+        accountExecErrors,
+        otherErrors
+      };
+    }
+
+    function evaluateStatementPayload(content, fallbackDate = null, item = null) {
       if (!content) {
         return {
           isMismatch: false,
           dateMismatch: false,
           periodMismatch: false,
           jsonError: false,
+          bankError: false,
           dateFrom: fallbackDate,
           dateTo: fallbackDate,
           period: null,
           periodLabel: null,
-          tooltip: fallbackDate ? `OK: Výpis (${formatDateCz(fallbackDate)})` : `OK: Výpis`
+          tooltip: fallbackDate ? `OK: Výpis (${formatDateCz(fallbackDate)})` : `OK: Záznam v pořádku`
         };
       }
 
@@ -1470,6 +1671,7 @@
           dateMismatch: false,
           periodMismatch: false,
           jsonError: true,
+          bankError: false,
           dateFrom: fallbackDate,
           dateTo: fallbackDate,
           period: null,
@@ -1484,11 +1686,47 @@
           dateMismatch: false,
           periodMismatch: false,
           jsonError: true,
+          bankError: false,
           dateFrom: fallbackDate,
           dateTo: fallbackDate,
           period: null,
           periodLabel: null,
           tooltip: `Chyba: Neplatný / poškozený JSON soubor z banky (${content.trim()})`
+        };
+      }
+
+      // Check for Bank Errors in JSON (InvalidCharacterSet, NARR, etc.)
+      const bankErrorInfo = evaluateBankErrors(content, item);
+      if (bankErrorInfo && bankErrorInfo.hasError) {
+        return {
+          isMismatch: true,
+          dateMismatch: false,
+          periodMismatch: false,
+          jsonError: false,
+          bankError: true,
+          dateFrom: fallbackDate,
+          dateTo: fallbackDate,
+          tooltip: bankErrorInfo.tooltip,
+          bankErrorInfo
+        };
+      }
+
+      // Check if this is a non-statement bank message (Payment, Balance, TransactionHistory) with no errors
+      const isStmt = (item && (String(item.type || item.typeLocalized || '').toLowerCase().includes('statement') || String(item.type || '').toLowerCase().includes('výpis')))
+        || (content && (content.accountStatements || content.statements || content.period));
+
+      if (!isStmt && item && item.type) {
+        return {
+          isMismatch: false,
+          dateMismatch: false,
+          periodMismatch: false,
+          jsonError: false,
+          bankError: false,
+          dateFrom: fallbackDate,
+          dateTo: fallbackDate,
+          period: null,
+          periodLabel: null,
+          tooltip: `OK: Zpráva banky v pořádku (${item.typeLocalized || item.type})`
         };
       }
 
@@ -1615,9 +1853,20 @@
 
     function checkDirectDateMismatch(item) {
       if (!item) return null;
+      if (item.errors) {
+        const bankErr = evaluateBankErrors(item, item);
+        if (bankErr && bankErr.hasError) {
+          return {
+            isMismatch: true,
+            bankError: true,
+            tooltip: bankErr.tooltip,
+            bankErrorInfo: bankErr
+          };
+        }
+      }
       const hasPayload = item.accountStatements || item.statements || item.payload || (item.dateFrom && item.dateTo) || item.period;
       if (hasPayload) {
-        return evaluateStatementPayload(item, item.date);
+        return evaluateStatementPayload(item, item.date, item);
       }
       return null; // Unknown / pending async scan
     }
@@ -1678,13 +1927,19 @@
       if (!item) return `<span class="w-5 h-5 flex-shrink-0 flex items-center justify-center inline-block"></span>`;
       const linked = findLinkedStatement(item);
       const key = item.statementJsonFileReferenceId || item.responseJsonId || (linked && (linked.statementJsonFileReferenceId || linked.responseJsonId)) || item.code || item.requestReferenceId;
-      const status = statementMismatchCache[key] !== undefined ? statementMismatchCache[key] : checkDirectDateMismatch(item);
+      const status = statementMismatchCache[key] !== undefined
+        ? statementMismatchCache[key]
+        : (item.code && statementMismatchCache[item.code] !== undefined
+            ? statementMismatchCache[item.code]
+            : (item.requestReferenceId && statementMismatchCache[item.requestReferenceId] !== undefined
+                ? statementMismatchCache[item.requestReferenceId]
+                : checkDirectDateMismatch(item)));
 
-      return renderStatusIconHtml(key, status);
+      return renderStatusIconHtml(key, status, item);
     }
 
-    function renderStatusIconHtml(key, status) {
-      let content = `<span class="w-1.5 h-1.5 rounded-full bg-gray-700/40 inline-block" title="Načítám rozsah a periodu výpisu..."></span>`;
+    function renderStatusIconHtml(key, status, item = null) {
+      let content = `<span class="w-1.5 h-1.5 rounded-full bg-gray-700/40 inline-block" title="Načítám kontrolu zprávy..."></span>`;
 
       if (status !== null && status !== undefined) {
         const isMismatch = typeof status === 'object' ? status.isMismatch : status;
@@ -1695,18 +1950,24 @@
         if (isMismatch === true) {
           const defaultTooltip = (fromStr && toStr && fromStr !== toStr)
             ? `Upozornění: Vícedenní rozsah výpisu (${fromStr} – ${toStr})`
-            : `Upozornění / Chyba výpisu`;
+            : `Upozornění / Chyba zprávy`;
           const titleText = escapeHtml(tooltip || defaultTooltip);
-          content = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="${titleText}"></i>`;
+          content = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${titleText}"></i>`;
         } else if (isMismatch === false) {
           const dateText = fromStr ? ` (${fromStr})` : '';
-          const defaultTooltip = `OK: Jednodenní výpis${dateText}`;
+          const defaultTooltip = `OK: Záznam v pořádku${dateText}`;
           const titleText = escapeHtml(tooltip || defaultTooltip);
-          content = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="${titleText}"></i>`;
+          content = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${titleText}"></i>`;
         }
       }
 
-      return `<span id="dateWarn-${key}" class="w-5 h-5 flex-shrink-0 flex items-center justify-center inline-block">${content}</span>`;
+      const keyClasses = [
+        key ? `date-warn-${key}` : '',
+        item && item.code ? `date-warn-${item.code}` : '',
+        item && item.requestReferenceId ? `date-warn-${item.requestReferenceId}` : ''
+      ].filter(Boolean).join(' ');
+
+      return `<span id="dateWarn-${key}" class="date-warn-icon ${keyClasses} w-5 h-5 flex-shrink-0 flex items-center justify-center inline-block cursor-help">${content}</span>`;
     }
 
     async function scanStatementDateMismatches(items) {
@@ -1728,20 +1989,38 @@
           try {
             // Pass silent = true so background scanning does not flood the raw console
             const fileContent = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${fileId}`, 'GET', null, true);
-            const info = evaluateStatementPayload(fileContent, item.date);
-            statementMismatchCache[key] = info;
+            let info = evaluateStatementPayload(fileContent, item.date, item);
 
-            const iconEls = [
-              document.getElementById(`dateWarn-${key}`),
-              item.code ? document.getElementById(`dateWarn-${item.code}`) : null,
-              item.requestReferenceId ? document.getElementById(`dateWarn-${item.requestReferenceId}`) : null
-            ].filter(Boolean);
+            // If bank error found but payment details not yet cached, resolve asynchronously from request
+            if (info.bankError && info.bankErrorInfo) {
+              const missingTx = info.bankErrorInfo.parsedErrors.some(e => e.txId && !paymentTxCache[e.txId.toLowerCase()]);
+              if (missingTx) {
+                const reqId = item.requestReferenceId || item.code;
+                if (reqId) {
+                  await ensurePaymentRequestCached(reqId);
+                  info = evaluateStatementPayload(fileContent, item.date, item);
+                }
+              }
+            }
+
+            statementMismatchCache[key] = info;
+            if (item.code) statementMismatchCache[item.code] = info;
+            if (item.requestReferenceId) statementMismatchCache[item.requestReferenceId] = info;
+
+            const selector = [
+              key ? `.date-warn-${key}` : null,
+              fileId ? `.date-warn-${fileId}` : null,
+              item.code ? `.date-warn-${item.code}` : null,
+              item.requestReferenceId ? `.date-warn-${item.requestReferenceId}` : null
+            ].filter(Boolean).join(',');
+
+            const iconEls = selector ? Array.from(document.querySelectorAll(selector)) : [];
 
             iconEls.forEach(iconEl => {
               if (info.isMismatch) {
-                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="${escapeHtml(info.tooltip)}"></i>`;
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${escapeHtml(info.tooltip)}"></i>`;
               } else {
-                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="${escapeHtml(info.tooltip)}"></i>`;
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${escapeHtml(info.tooltip)}"></i>`;
               }
             });
           } catch (e) {
@@ -1750,20 +2029,26 @@
               isMismatch: isErr,
               dateFrom: item.date,
               dateTo: item.date,
-              tooltip: isErr ? `Chyba při načítání JSON výpisu (${e.message})` : (item.date ? `OK: Výpis (${formatDateCz(item.date)})` : `OK: Výpis`)
+              tooltip: isErr ? `Chyba při načítání JSON souboru (${e.message})` : (item.date ? `OK: Záznam (${formatDateCz(item.date)})` : `OK: Záznam v pořádku`)
             };
             statementMismatchCache[key] = fallbackInfo;
-            const iconEls = [
-              document.getElementById(`dateWarn-${key}`),
-              item.code ? document.getElementById(`dateWarn-${item.code}`) : null,
-              item.requestReferenceId ? document.getElementById(`dateWarn-${item.requestReferenceId}`) : null
-            ].filter(Boolean);
+            if (item.code) statementMismatchCache[item.code] = fallbackInfo;
+            if (item.requestReferenceId) statementMismatchCache[item.requestReferenceId] = fallbackInfo;
+
+            const selector = [
+              key ? `.date-warn-${key}` : null,
+              fileId ? `.date-warn-${fileId}` : null,
+              item.code ? `.date-warn-${item.code}` : null,
+              item.requestReferenceId ? `.date-warn-${item.requestReferenceId}` : null
+            ].filter(Boolean).join(',');
+
+            const iconEls = selector ? Array.from(document.querySelectorAll(selector)) : [];
 
             iconEls.forEach(iconEl => {
               if (fallbackInfo.isMismatch) {
-                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="${escapeHtml(fallbackInfo.tooltip)}"></i>`;
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${escapeHtml(fallbackInfo.tooltip)}"></i>`;
               } else {
-                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="${escapeHtml(fallbackInfo.tooltip)}"></i>`;
+                iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${escapeHtml(fallbackInfo.tooltip)}"></i>`;
               }
             });
           }
@@ -1849,21 +2134,21 @@
             } catch (e1) {
               try {
                 reqData = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${reqId}`, 'GET', null, true);
-              } catch (e2) {}
+              } catch (e2) {
+                try {
+                  reqData = await fetchApi(`/api/v1/Utility/GetReqDataFromDS/${reqId}`, 'GET', null, true);
+                } catch (e3) {}
+              }
             }
 
             if (reqData && !reqData._isInvalidJson && !reqData._isEmptyResponse) {
-              const curr = reqData.currencyCode || reqData.currency || reqData.currency_code || null;
-              const dFrom = reqData.dateFrom || reqData.fromDate || reqData.date_from || null;
-              const dTo = reqData.dateTo || reqData.toDate || reqData.date_to || null;
-              const info = { currencyCode: curr, dateFrom: dFrom, dateTo: dTo };
-
-              statementReqCache[reqId] = info;
+              const info = indexRequestData(reqId, reqData);
               if (item.code) statementReqCache[item.code] = info;
               if (item.requestReferenceId) statementReqCache[item.requestReferenceId] = info;
 
+              const curr = info.currencyCode;
               if (curr) {
-                const tooltip = buildCurrencyTooltip(curr, dFrom, dTo);
+                const tooltip = buildCurrencyTooltip(curr, info.dateFrom, info.dateTo);
                 const badgeStyle = getCurrencyBadgeStyle(curr);
 
                 const badgeEls = Array.from(document.querySelectorAll(`.req-curr-${reqId}`))
@@ -1996,6 +2281,7 @@
       rawPayments = [];
       statementMismatchCache = {};
       statementReqCache = {};
+      paymentTxCache = {};
 
       updateStatusUI(false, "Odhlášeno");
       renderEmptyLockedStateAll();
@@ -2012,6 +2298,7 @@
       rawPayments = [];
       statementMismatchCache = {};
       statementReqCache = {};
+      paymentTxCache = {};
 
       updateStatusUI(false, "Relace vypršela");
       renderEmptyLockedStateAll();
@@ -2769,11 +3056,32 @@
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    function showDetailModal(title, jsonContent) {
+    function showDetailModal(title, jsonContent, evalResult = null) {
       document.getElementById('detailModalTitle').innerHTML = `<i class="fa-solid fa-code text-blue-400"></i> ${title}`;
 
+      let evalInfo = evalResult;
+      if (!evalInfo && jsonContent && typeof jsonContent === 'object') {
+        const check = evaluateBankErrors(jsonContent);
+        if (check && check.hasError) {
+          evalInfo = check;
+        }
+      }
+
+      let bannerHtml = '';
+      if (evalInfo && evalInfo.isMismatch && evalInfo.tooltip) {
+        bannerHtml = `
+          <div class="mb-4 p-3.5 rounded-xl bg-red-950/80 border border-red-700/80 text-red-200 text-xs shadow-lg flex items-start gap-3">
+            <i class="fa-solid fa-circle-exclamation text-red-400 text-lg mt-0.5 flex-shrink-0 animate-pulse"></i>
+            <div class="flex-1 min-w-0">
+              <div class="font-bold text-red-300 text-sm mb-1">Detekována chyba / upozornění ve zprávě</div>
+              <div class="whitespace-pre-line text-red-100 font-mono text-xs leading-relaxed opacity-95">${escapeHtml(evalInfo.tooltip)}</div>
+            </div>
+          </div>
+        `;
+      }
+
       const contentEl = document.getElementById('detailModalContent');
-      contentEl.innerHTML = formatJsonToSyntaxHtml(jsonContent);
+      contentEl.innerHTML = bannerHtml + formatJsonToSyntaxHtml(jsonContent);
 
       document.getElementById('detailModal').classList.remove('hidden');
     }
@@ -3339,11 +3647,11 @@
 
       const processAndShow = (data) => {
         if (data && typeof data === 'object' && !data._isInvalidJson && !data._isEmptyResponse) {
-          const curr = data.currencyCode || data.currency || data.currency_code;
-          const dFrom = data.dateFrom || data.fromDate || data.date_from;
-          const dTo = data.dateTo || data.toDate || data.date_to;
+          const info = indexRequestData(cleanId, data);
+          const curr = info?.currencyCode;
+          const dFrom = info?.dateFrom;
+          const dTo = info?.dateTo;
           if (curr) {
-            statementReqCache[cleanId] = { currencyCode: curr, dateFrom: dFrom, dateTo: dTo };
             const tooltip = buildCurrencyTooltip(curr, dFrom, dTo);
             const badgeStyle = getCurrencyBadgeStyle(curr);
 
@@ -3390,19 +3698,34 @@
       try {
         const fileContent = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${fileId}`, 'GET');
 
-        // Inspect date & period mismatch in loaded JSON file
-        const evalResult = evaluateStatementPayload(fileContent);
-        statementMismatchCache[fileId] = evalResult;
-        const iconEl = document.getElementById(`dateWarn-${fileId}`);
-        if (iconEl) {
-          if (evalResult.isMismatch) {
-            iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse" title="${escapeHtml(evalResult.tooltip)}"></i>`;
-          } else {
-            iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm" title="${escapeHtml(evalResult.tooltip)}"></i>`;
+        // Inspect date & period mismatch and bank errors in loaded JSON file
+        let evalResult = evaluateStatementPayload(fileContent);
+        if (evalResult.bankError && evalResult.bankErrorInfo) {
+          const missingTx = evalResult.bankErrorInfo.parsedErrors.some(e => e.txId && !paymentTxCache[e.txId.toLowerCase()]);
+          if (missingTx && modalNavContext?.items && modalNavContext.currentIndex !== undefined) {
+            const currentItem = modalNavContext.items[modalNavContext.currentIndex];
+            const reqId = currentItem?.requestReferenceId || currentItem?.code;
+            if (reqId) {
+              await ensurePaymentRequestCached(reqId);
+              evalResult = evaluateStatementPayload(fileContent, null, currentItem);
+            }
           }
         }
+        statementMismatchCache[fileId] = evalResult;
 
-        showDetailModal(title, fileContent);
+        const selector = [
+          `.date-warn-${fileId}`
+        ].join(',');
+
+        document.querySelectorAll(selector).forEach(iconEl => {
+          if (evalResult.isMismatch) {
+            iconEl.innerHTML = `<i class="fa-solid fa-circle-exclamation text-red-500 text-base animate-pulse cursor-help" title="${escapeHtml(evalResult.tooltip)}"></i>`;
+          } else {
+            iconEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500/80 text-sm cursor-help" title="${escapeHtml(evalResult.tooltip)}"></i>`;
+          }
+        });
+
+        showDetailModal(title, fileContent, evalResult);
       } catch (err) {
         logConsole("Chyba při načítání souboru", err.message);
         showDetailModal(title, err.message);
