@@ -1619,11 +1619,27 @@
 
       const { obj, httpPrefix, rawStr } = extractJsonAndHttpInfo(content);
 
-      // Check HTTP status error code in prefix or rawStr (e.g. HTTP 400, HTTP 500, etc.)
-      const httpMatch = (httpPrefix || rawStr).match(/HTTP(?:\s*-\s*|\s+)?(\d{3})/i)
-        || (httpPrefix || rawStr).match(/\b(4\d{2}|5\d{2})\b/);
-      const isHttpError = !!httpMatch;
-      const httpCode = httpMatch ? (httpMatch[1] || httpMatch[0]) : null;
+      // Check HTTP status error code strictly:
+      // 1. From httpPrefix (e.g. "HTTP 400 - ...")
+      // 2. From raw text if it begins with HTTP status or contains explicit "HTTP <4xx/5xx>"
+      // 3. Or from ProblemDetails JSON object (obj.status in 400..599)
+      // NEVER match arbitrary 3-digit numbers inside arbitrary JSON content!
+      let httpCode = null;
+      if (httpPrefix) {
+        const m = httpPrefix.match(/HTTP(?:\s*-\s*|\s+)?(\d{3})/i) || httpPrefix.match(/\b([45]\d{2})\b/);
+        if (m) httpCode = m[1] || m[0];
+      } else if (typeof content === 'string') {
+        const m = content.match(/^HTTP(?:\s*-\s*|\s+)?([45]\d{2})/i) || content.match(/\bHTTP(?:\s*-\s*|\s+)([45]\d{2})\b/i);
+        if (m) httpCode = m[1];
+      }
+
+      if (!httpCode && obj && typeof obj === 'object') {
+        if (typeof obj.status === 'number' && obj.status >= 400 && obj.status < 600) {
+          httpCode = String(obj.status);
+        }
+      }
+
+      const isHttpError = !!httpCode;
 
       let errors = [];
       if (obj && typeof obj === 'object') {
@@ -1644,7 +1660,7 @@
 
       // If no JSON error list found, but we have an HTTP error in prefix or raw text
       if (errors.length === 0 && isHttpError) {
-        const cleanMsg = (httpPrefix || rawStr).replace(/\r?\n.*/s, '').trim();
+        const cleanMsg = (httpPrefix || (typeof content === 'string' ? content : '')).replace(/\r?\n.*/s, '').trim();
         errors = [{
           error: `HTTP ${httpCode}`,
           message: cleanMsg || `Chyba bankovního serveru (HTTP ${httpCode})`
@@ -3246,7 +3262,8 @@
       document.getElementById('detailModalTitle').innerHTML = `<i class="fa-solid fa-code text-blue-400"></i> ${title}`;
 
       let evalInfo = evalResult;
-      if (!evalInfo && jsonContent && typeof jsonContent === 'object') {
+      const isRequestModal = (modalNavContext && modalNavContext.actionType === 'request') || /požadav/i.test(String(title));
+      if (!evalInfo && jsonContent && typeof jsonContent === 'object' && !isRequestModal) {
         const check = evaluateBankErrors(jsonContent);
         if (check && check.hasError) {
           evalInfo = check;
@@ -3900,7 +3917,7 @@
 
       // 1. Primary Maintenance API: /api/v1/Maintenance/GetStatementReqDataFromDS/{tenantId}/{id}
       try {
-        const maintReq = await fetchApi(`/api/v1/Maintenance/GetStatementReqDataFromDS/${config.tenantId}/${cleanId}`, 'GET');
+        const maintReq = await fetchApi(`/api/v1/Maintenance/GetStatementReqDataFromDS/${config.tenantId}/${cleanId}`, 'GET', null, true);
         processAndShow(maintReq);
         return;
       } catch (err1) {
@@ -3909,13 +3926,13 @@
 
       // 2. Secondary Maintenance API: /api/v1/Maintenance/GetFile/{tenantId}/{id}
       try {
-        const maintFile = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${cleanId}`, 'GET');
+        const maintFile = await fetchApi(`/api/v1/Maintenance/GetFile/${config.tenantId}/${cleanId}`, 'GET', null, true);
         processAndShow(maintFile);
         return;
       } catch (err2) {
         // 3. Fallback to Utility API: /api/v1/Utility/GetReqDataFromDS/{id}
         try {
-          const reqData = await fetchApi(`/api/v1/Utility/GetReqDataFromDS/${cleanId}`, 'GET');
+          const reqData = await fetchApi(`/api/v1/Utility/GetReqDataFromDS/${cleanId}`, 'GET', null, true);
           processAndShow(reqData);
           return;
         } catch (err3) {
