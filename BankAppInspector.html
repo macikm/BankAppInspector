@@ -213,6 +213,15 @@
       background-color: rgba(0, 121, 107, 0.1) !important;
     }
 
+    html.light #topTenantContainer button:not(#tenantDropdownTrigger) {
+      color: #00796b !important;
+    }
+
+    html.light #topTenantContainer button:not(#tenantDropdownTrigger):hover {
+      color: #004d40 !important;
+      background-color: rgba(0, 121, 107, 0.1) !important;
+    }
+
     html.light #tenantDropdownPanel {
       background-color: #ffffff !important;
       border-color: #cbd5e1 !important;
@@ -672,10 +681,16 @@
           </div>
         </div>
 
-        <button onclick="refreshData()" title="Obnovit pro nový Tenant"
-          class="text-green-500 hover:text-green-400 transition px-1 ml-auto">
-          <i class="fa-solid fa-arrow-rotate-right text-xs"></i>
-        </button>
+        <div class="flex items-center gap-1 ml-auto">
+          <button type="button" id="copyTenantBtn" onclick="copySelectedTenantId(event)" title="Zkopírovat ID vybraného tenanta do schránky"
+            class="text-green-500 hover:text-green-400 hover:bg-green-500/10 p-1.5 rounded-lg transition text-xs flex items-center justify-center">
+            <i class="fa-regular fa-copy" id="copyTenantIcon"></i>
+          </button>
+          <button type="button" onclick="refreshData()" title="Obnovit pro nový Tenant"
+            class="text-green-500 hover:text-green-400 hover:bg-green-500/10 p-1.5 rounded-lg transition text-xs flex items-center justify-center">
+            <i class="fa-solid fa-arrow-rotate-right"></i>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -2899,6 +2914,50 @@
         }
         knownTenantsMap.set(tid, { id: tid, name: tid });
         selectTenant(tid);
+      }
+    }
+
+    async function copySelectedTenantId(e) {
+      if (e) e.stopPropagation();
+      const tid = (config.tenantId || '').trim();
+      if (!tid) {
+        showToast("Není vybrán žádný platný tenant.", "error", 2500);
+        return;
+      }
+
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(tid);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = tid;
+          ta.style.position = 'fixed';
+          ta.style.left = '-999999px';
+          ta.style.top = '-999999px';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+
+        // Visual feedback on the button icon
+        const icon = document.getElementById('copyTenantIcon');
+        const btn = document.getElementById('copyTenantBtn');
+        if (icon) {
+          icon.className = 'fa-solid fa-check text-emerald-400';
+          if (btn) btn.classList.add('text-emerald-400');
+          setTimeout(() => {
+            icon.className = 'fa-regular fa-copy';
+            if (btn) btn.classList.remove('text-emerald-400');
+          }, 1500);
+        }
+
+        showToast(`Tenant ID zkopírováno: ${tid}`, 'success', 2500);
+        logConsole(`Tenant ID zkopírováno do schránky: ${tid}`);
+      } catch (err) {
+        logConsole("Kopírování do schránky selhalo: " + err.message);
+        showToast("Kopírování do schránky selhalo.", "error", 2500);
       }
     }
 
