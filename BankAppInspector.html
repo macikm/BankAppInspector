@@ -1702,8 +1702,9 @@
           || /invalidcharacterset|character|nesprávný znak|nepovolený znak/i.test(msg)
           || /remittanceinformation/i.test(scope);
 
-        const isAccountExec = code.toUpperCase() === 'NARR'
-          || /cannot be executed from this account|nelze provést platbu/i.test(msg);
+        // NARR in ISO 20022 means "Narrative" (free text). It is NOT a specific code for account execution!
+        // Only classify as account execution error if the text actually states it.
+        const isAccountExec = /cannot be executed from this account|nelze provést platbu/i.test(msg);
 
         return {
           code,
@@ -1754,7 +1755,7 @@
 
       if (accountExecErrors.length > 0) {
         if (charSetErrors.length > 0) lines.push('');
-        lines.push(`Chyba platby: Z účtu není možné provádět platby (Payment cannot be executed from this account / NARR)`);
+        lines.push(`Chyba platby: Z účtu není možné provádět platby (Payment cannot be executed from this account)`);
         lines.push(`• Počet neprovedených plateb: ${accountExecErrors.length}`);
         const sample = accountExecErrors.slice(0, 4);
         sample.forEach(e => {
@@ -1774,7 +1775,7 @@
       if (otherErrors.length > 0) {
         if (charSetErrors.length > 0 || accountExecErrors.length > 0) lines.push('');
         otherErrors.forEach(e => {
-          const errName = e.code ? `${e.code}: ` : '';
+          const errName = (e.code && e.code.toUpperCase() !== 'NARR') ? `${e.code}: ` : '';
           lines.push(`Chyba z banky: ${errName}${e.msg || 'Neznámá chyba'}`);
           if (e.txId) lines.push(`• Transakce ID: ${e.txId}`);
           if (e.scope) lines.push(`• Oblast: ${e.scope}`);
