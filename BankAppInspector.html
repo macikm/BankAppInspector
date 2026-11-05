@@ -1088,17 +1088,84 @@
 
           <!-- Dynamic Filters & Pagination for Telemetry -->
           <div class="flex flex-wrap items-center gap-3" onclick="event.stopPropagation()">
-            <!-- Level Filter -->
-            <select id="filterLevelTelemetry" onchange="fetchTelemetryData(true)" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-rose-400 focus:outline-none focus:border-rose-500 font-medium">
-              <option value="ERRORS_CRITICAL" selected>Úroveň: Chyby & Kritické (Error, Critical, Fatal)</option>
-              <option value="ALL_ERRORS_WARNINGS">Úroveň: Chyby & Varování (+ Warning)</option>
-              <option value="ALL">Všechny úrovně (včetně Info)</option>
-              <option value="Error">Pouze Error</option>
-              <option value="Critical">Pouze Critical</option>
-              <option value="Fatal">Pouze Fatal</option>
-              <option value="Warning">Pouze Warning</option>
-              <option value="Information">Pouze Information</option>
-            </select>
+            <!-- Level / Severity Filter (Checkboxes Dropdown) -->
+            <div class="relative inline-block text-left" id="telemetryLevelDropdownContainer" onclick="event.stopPropagation()">
+              <button type="button" onclick="toggleTelemetryLevelDropdown()" id="btnTelemetryLevelDropdown"
+                class="px-2.5 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg text-xs text-rose-400 focus:outline-none focus:border-rose-500 font-medium flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-layer-group text-[11px] text-rose-400"></i>
+                <span id="lblTelemetryLevels">Úroveň: Chyby & Kritické (3)</span>
+                <i class="fa-solid fa-chevron-down text-[10px] text-gray-400 transition-transform duration-200" id="chevronTelemetryLevel"></i>
+              </button>
+
+              <div id="panelTelemetryLevels" class="hidden absolute left-0 mt-1 w-64 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-3 z-30 space-y-2.5 text-xs text-gray-200 backdrop-blur-md">
+                <div class="flex items-center justify-between pb-1.5 border-b border-gray-800">
+                  <span class="font-bold text-gray-300">Zvolené úrovně</span>
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="setTelemetryLevelPreset('ERRORS')" class="text-[10px] text-rose-400 hover:text-rose-300 underline font-medium">Jen chyby</button>
+                    <span class="text-gray-600">|</span>
+                    <button type="button" onclick="setTelemetryLevelPreset('ALL')" class="text-[10px] text-blue-400 hover:text-blue-300 underline font-medium">Vše</button>
+                    <span class="text-gray-600">|</span>
+                    <button type="button" onclick="setTelemetryLevelPreset('NONE')" class="text-[10px] text-gray-400 hover:text-gray-200 underline font-medium">Vymazat</button>
+                  </div>
+                </div>
+
+                <div class="space-y-1.5 font-mono">
+                  <label class="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/80 cursor-pointer transition select-none">
+                    <span class="flex items-center gap-2">
+                      <input type="checkbox" id="chkLvlFatal" value="Fatal" checked onchange="onTelemetryLevelCheckboxChange()"
+                        class="w-3.5 h-3.5 rounded bg-gray-800 border-gray-600 text-rose-600 focus:ring-0 focus:ring-offset-0 cursor-pointer">
+                      <span class="text-rose-400 font-semibold">Fatal</span>
+                    </span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 border border-rose-800/60 font-sans">Kritické selhání</span>
+                  </label>
+
+                  <label class="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/80 cursor-pointer transition select-none">
+                    <span class="flex items-center gap-2">
+                      <input type="checkbox" id="chkLvlCritical" value="Critical" checked onchange="onTelemetryLevelCheckboxChange()"
+                        class="w-3.5 h-3.5 rounded bg-gray-800 border-gray-600 text-rose-600 focus:ring-0 focus:ring-offset-0 cursor-pointer">
+                      <span class="text-rose-400 font-semibold">Critical</span>
+                    </span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 border border-rose-800/60 font-sans">Kritická chyba</span>
+                  </label>
+
+                  <label class="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/80 cursor-pointer transition select-none">
+                    <span class="flex items-center gap-2">
+                      <input type="checkbox" id="chkLvlError" value="Error" checked onchange="onTelemetryLevelCheckboxChange()"
+                        class="w-3.5 h-3.5 rounded bg-gray-800 border-gray-600 text-red-600 focus:ring-0 focus:ring-offset-0 cursor-pointer">
+                      <span class="text-red-400 font-semibold">Error</span>
+                    </span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-red-950 text-red-300 border border-red-800/60 font-sans">Chyba</span>
+                  </label>
+
+                  <label class="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/80 cursor-pointer transition select-none">
+                    <span class="flex items-center gap-2">
+                      <input type="checkbox" id="chkLvlWarning" value="Warning" onchange="onTelemetryLevelCheckboxChange()"
+                        class="w-3.5 h-3.5 rounded bg-gray-800 border-gray-600 text-amber-500 focus:ring-0 focus:ring-offset-0 cursor-pointer">
+                      <span class="text-amber-400 font-semibold">Warning</span>
+                    </span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800/60 font-sans">Varování</span>
+                  </label>
+
+                  <label class="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/80 cursor-pointer transition select-none">
+                    <span class="flex items-center gap-2">
+                      <input type="checkbox" id="chkLvlInfo" value="Information" onchange="onTelemetryLevelCheckboxChange()"
+                        class="w-3.5 h-3.5 rounded bg-gray-800 border-gray-600 text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer">
+                      <span class="text-blue-400 font-semibold">Information</span>
+                    </span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-blue-950 text-blue-300 border border-blue-800/60 font-sans">Info</span>
+                  </label>
+
+                  <label class="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/80 cursor-pointer transition select-none">
+                    <span class="flex items-center gap-2">
+                      <input type="checkbox" id="chkLvlDebug" value="Debug" onchange="onTelemetryLevelCheckboxChange()"
+                        class="w-3.5 h-3.5 rounded bg-gray-800 border-gray-600 text-gray-400 focus:ring-0 focus:ring-offset-0 cursor-pointer">
+                      <span class="text-gray-400 font-semibold">Debug</span>
+                    </span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-gray-800 text-gray-300 border border-gray-700 font-sans">Ladění</span>
+                  </label>
+                </div>
+              </div>
+            </div>
 
             <!-- Host / Environment Filter -->
             <select id="filterHostTelemetry" onchange="fetchTelemetryData(true)" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-rose-500">
@@ -3269,6 +3336,13 @@
           return;
         }
 
+        const levelPanel = document.getElementById('panelTelemetryLevels');
+        if (levelPanel && !levelPanel.classList.contains('hidden')) {
+          closeTelemetryLevelDropdown();
+          e.preventDefault();
+          return;
+        }
+
         const configModal = document.getElementById('configModal');
 
         if (isDetailOpen) {
@@ -3309,6 +3383,10 @@
         const container = document.getElementById('topTenantContainer');
         if (container && !container.contains(e.target)) {
           closeTenantDropdown();
+        }
+        const levelContainer = document.getElementById('telemetryLevelDropdownContainer');
+        if (levelContainer && !levelContainer.contains(e.target)) {
+          closeTelemetryLevelDropdown();
         }
       });
     });
@@ -3994,6 +4072,7 @@
       if (filterStateStmt) filterStateStmt.value = 'ALL';
       if (filterCountStmt) filterCountStmt.value = 'ALL';
       if (filterStateBank) filterStateBank.value = 'ALL';
+      setTelemetryLevelPreset('ERRORS');
 
       // 3. Reset date filter preset to ALL
       const datePreset = document.getElementById('datePresetSelect');
@@ -4563,6 +4642,90 @@
     // ==========================================
     let rawTelemetryLogs = [];
     let currentFilteredTelemetry = [];
+    const TELEMETRY_ALL_LEVELS = ['Fatal', 'Critical', 'Error', 'Warning', 'Information', 'Debug'];
+
+    function toggleTelemetryLevelDropdown() {
+      const panel = document.getElementById('panelTelemetryLevels');
+      const chevron = document.getElementById('chevronTelemetryLevel');
+      if (!panel) return;
+      const isHidden = panel.classList.contains('hidden');
+      if (isHidden) {
+        panel.classList.remove('hidden');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+      } else {
+        closeTelemetryLevelDropdown();
+      }
+    }
+
+    function closeTelemetryLevelDropdown() {
+      const panel = document.getElementById('panelTelemetryLevels');
+      const chevron = document.getElementById('chevronTelemetryLevel');
+      if (panel) panel.classList.add('hidden');
+      if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+
+    function getSelectedTelemetryLevels() {
+      const levels = [];
+      const chkMap = [
+        { id: 'chkLvlFatal', val: 'Fatal' },
+        { id: 'chkLvlCritical', val: 'Critical' },
+        { id: 'chkLvlError', val: 'Error' },
+        { id: 'chkLvlWarning', val: 'Warning' },
+        { id: 'chkLvlInfo', val: 'Information' },
+        { id: 'chkLvlDebug', val: 'Debug' }
+      ];
+      for (const item of chkMap) {
+        const el = document.getElementById(item.id);
+        if (el && el.checked) {
+          levels.push(item.val);
+        }
+      }
+      return levels;
+    }
+
+    function updateTelemetryLevelButtonLabel(levels) {
+      const lbl = document.getElementById('lblTelemetryLevels');
+      if (!lbl) return;
+      if (levels.length === 0) {
+        lbl.textContent = 'Úroveň: Žádná vybraná (0)';
+      } else if (levels.length === TELEMETRY_ALL_LEVELS.length) {
+        lbl.textContent = 'Úroveň: Všechny úrovně (6)';
+      } else if (levels.length === 3 && levels.includes('Fatal') && levels.includes('Critical') && levels.includes('Error')) {
+        lbl.textContent = 'Úroveň: Chyby & Kritické (3)';
+      } else {
+        lbl.textContent = `Úroveň: ${levels.join(', ')} (${levels.length})`;
+      }
+    }
+
+    async function onTelemetryLevelCheckboxChange() {
+      const levels = getSelectedTelemetryLevels();
+      updateTelemetryLevelButtonLabel(levels);
+      await fetchTelemetryData(true);
+    }
+
+    async function setTelemetryLevelPreset(preset) {
+      const chkMap = [
+        { id: 'chkLvlFatal', val: 'Fatal' },
+        { id: 'chkLvlCritical', val: 'Critical' },
+        { id: 'chkLvlError', val: 'Error' },
+        { id: 'chkLvlWarning', val: 'Warning' },
+        { id: 'chkLvlInfo', val: 'Information' },
+        { id: 'chkLvlDebug', val: 'Debug' }
+      ];
+
+      for (const item of chkMap) {
+        const el = document.getElementById(item.id);
+        if (!el) continue;
+        if (preset === 'ERRORS') {
+          el.checked = ['Fatal', 'Critical', 'Error'].includes(item.val);
+        } else if (preset === 'ALL') {
+          el.checked = true;
+        } else if (preset === 'NONE') {
+          el.checked = false;
+        }
+      }
+      await onTelemetryLevelCheckboxChange();
+    }
 
     function renderTelemetryLevelBadge(level) {
       const lvl = String(level || 'Info').toUpperCase();
@@ -4618,24 +4781,17 @@
       filterParts.push(`(metadata/asol_application_code eq 'ASOLEU-BankApp-AP-')`);
       filterParts.push(`(metadata/asol_service_name eq 'ASOLEU.BankApp')`);
 
-      // 2. Level filter
-      const levelEl = document.getElementById('filterLevelTelemetry');
-      const levelVal = levelEl ? levelEl.value : 'ERRORS_CRITICAL';
-      if (levelVal === 'ERRORS_CRITICAL') {
-        filterParts.push(`(Log/Level in ('Error', 'Critical', 'Fatal'))`);
-      } else if (levelVal === 'ALL_ERRORS_WARNINGS') {
-        filterParts.push(`(Log/Level in ('Error', 'Critical', 'Fatal', 'Warning'))`);
-      } else if (levelVal === 'Error') {
-        filterParts.push(`(Log/Level in ('Error'))`);
-      } else if (levelVal === 'Warning') {
-        filterParts.push(`(Log/Level in ('Warning'))`);
-      } else if (levelVal === 'Critical') {
-        filterParts.push(`(Log/Level in ('Critical'))`);
-      } else if (levelVal === 'Fatal') {
-        filterParts.push(`(Log/Level in ('Fatal'))`);
-      } else if (levelVal === 'Information') {
-        filterParts.push(`(Log/Level in ('Information'))`);
-      } // 'ALL' adds no level filter
+      // 2. Level filter (from checkboxes)
+      const checkedLevels = getSelectedTelemetryLevels();
+      if (checkedLevels.length > 0 && checkedLevels.length < TELEMETRY_ALL_LEVELS.length) {
+        const formatted = checkedLevels.map(l => `'${l}'`).join(', ');
+        filterParts.push(`(Log/Level in (${formatted}))`);
+      } else if (checkedLevels.length === 0) {
+        rawTelemetryLogs = [];
+        applyFiltersTelemetry();
+        if (icon) icon.classList.remove('fa-spin');
+        return;
+      } // If all levels checked, omit level filter entirely so all logs are returned
 
       // 3. Host filter
       const hostEl = document.getElementById('filterHostTelemetry');
