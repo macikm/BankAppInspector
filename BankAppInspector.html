@@ -4,9 +4,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BankApp Inspector - Výpisy & Příkazy</title>
-  <!-- Favicon (Multiple Green Dollar Bills) -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><g transform='rotate(-14 32 32)'><rect x='4' y='14' width='56' height='36' rx='6' fill='%23047857' stroke='%23065f46' stroke-width='1.5'/><rect x='8' y='18' width='48' height='28' rx='4' fill='none' stroke='%2334d399' stroke-width='1.5' stroke-dasharray='3 2'/><circle cx='32' cy='32' r='8' fill='%23064e3b'/><text x='32' y='37.5' font-family='Arial, sans-serif' font-size='14' font-weight='bold' fill='%23a7f3d0' text-anchor='middle'>$</text></g><g transform='rotate(8 32 34)'><rect x='4' y='14' width='56' height='36' rx='6' fill='%23059669' stroke='%23047857' stroke-width='1.5'/><rect x='8' y='18' width='48' height='28' rx='4' fill='none' stroke='%23a7f3d0' stroke-width='1.5' stroke-dasharray='3 2'/><circle cx='32' cy='32' r='9' fill='%23047857' stroke='%23a7f3d0' stroke-width='1.5'/><text x='32' y='38' font-family='Arial, sans-serif' font-size='16' font-weight='900' fill='%23ffffff' text-anchor='middle'>$</text><circle cx='12' cy='22' r='2' fill='%23a7f3d0'/><circle cx='52' cy='22' r='2' fill='%23a7f3d0'/><circle cx='12' cy='42' r='2' fill='%23a7f3d0'/><circle cx='52' cy='42' r='2' fill='%23a7f3d0'/></g></svg>">
+  <title>BankApp Inspector - Výpisy, Platby & Telemetrie</title>
+  <!-- PWA Manifest & App Icons -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="theme-color" content="#0d9488">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BankApp">
+  <meta name="application-name" content="BankApp Inspector">
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome Icons -->
@@ -696,6 +706,13 @@
 
     <!-- Right Section: Theme Switcher, OAuth Status, Logout & Auth Modal Trigger -->
     <div class="flex flex-wrap items-center gap-3 text-sm">
+      <!-- PWA Install Button (visible when browser supports installation) -->
+      <button id="btnPwaInstall" onclick="promptPwaInstall()" title="Nainstalovat BankApp Inspector jako aplikaci do Windows"
+        class="hidden px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 rounded-xl border border-teal-500/30 flex items-center gap-1.5 transition shadow-sm text-xs font-medium">
+        <i class="fa-solid fa-download text-teal-400"></i>
+        <span class="hidden sm:inline">Instalovat aplikaci</span>
+      </button>
+
       <!-- Theme Switcher Button (Before OAuth badge) -->
       <button onclick="toggleTheme()" title="Přepnout Tmavý / Světlý režim"
         class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl border border-gray-700 flex items-center gap-2 transition shadow-sm">
@@ -5092,6 +5109,48 @@
         row.style.display = text.includes(q) ? '' : 'none';
       });
     }
+
+    // PWA Service Worker Registration & Installation Prompt
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => {
+            console.log('BankApp PWA ServiceWorker registered with scope:', reg.scope);
+          })
+          .catch(err => {
+            console.warn('BankApp PWA ServiceWorker registration failed:', err);
+          });
+      });
+    }
+
+    let deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      const installBtn = document.getElementById('btnPwaInstall');
+      if (installBtn) installBtn.classList.remove('hidden');
+    });
+
+    async function promptPwaInstall() {
+      if (!deferredInstallPrompt) {
+        showToast("Pro instalaci aplikace klikněte na ikonku instalace v adresním řádku prohlížeče (vpravo nahoře).", "info", 4000);
+        return;
+      }
+      deferredInstallPrompt.prompt();
+      const choiceResult = await deferredInstallPrompt.userChoice;
+      if (choiceResult && choiceResult.outcome === 'accepted') {
+        showToast("Probíhá instalace BankApp Inspector do Windows...", "info", 3000);
+      }
+      deferredInstallPrompt = null;
+      const installBtn = document.getElementById('btnPwaInstall');
+      if (installBtn) installBtn.classList.add('hidden');
+    }
+
+    window.addEventListener('appinstalled', () => {
+      showToast("BankApp Inspector byl úspěšně nainstalován jako aplikace do Windows!", "success", 4000);
+      const installBtn = document.getElementById('btnPwaInstall');
+      if (installBtn) installBtn.classList.add('hidden');
+    });
 
     // Auto update env URL link on load
     updateEnvUrls();

@@ -1,0 +1,67 @@
+{
+  "name": "BankApp Inspector",
+  "short_name": "BankApp",
+  "description": "Monitor výpisů, plateb a telemetrie pro Asol BankApp",
+  "id": "bankapp-inspector",
+  "start_url": "./BankAppInspector.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#030712",
+  "theme_color": "#0d9488",
+  "orientation": "any",
+  "categories": [
+    "business",
+    "finance",
+    "productivity",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "ERP Požadavky",
+      "url": "./BankAppInspector.html#erp",
+      "description": "Zobrazit ERP zprávy a požadavky"
+    },
+    {
+      "name": "Výpisy & Banka",
+      "url": "./BankAppInspector.html#statements",
+      "description": "Zobrazit výpisy a bankovní komunikaci"
+    },
+    {
+      "name": "Telemetrie",
+      "url": "./BankAppInspector.html#telemetry",
+      "description": "Zobrazit systémové logy a telemetrii"
+    }
+  ]
+}
