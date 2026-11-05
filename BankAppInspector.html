@@ -1217,15 +1217,15 @@
           <table class="w-full text-left text-sm" id="gridTelemetryTable">
             <thead class="bg-gray-900/90 text-gray-400 uppercase text-xs sticky top-0 z-10 backdrop-blur-md">
               <tr>
-                <th class="p-3">Čas</th>
-                <th class="p-3">Úroveň</th>
-                <th class="p-3">Zpráva (Message)</th>
-                <th class="p-3">Služba / Logger</th>
-                <th class="p-3">Endpoint / Path</th>
-                <th class="p-3">Tenant ID</th>
-                <th class="p-3">Server (Host)</th>
-                <th class="p-3">Trace ID</th>
-                <th class="p-3 text-center">Akce</th>
+                <th class="p-3 w-[150px] whitespace-nowrap">Čas</th>
+                <th class="p-3 w-[100px] whitespace-nowrap">Úroveň</th>
+                <th class="p-3 min-w-[280px] max-w-[420px]">Zpráva (Message)</th>
+                <th class="p-3 w-[170px] whitespace-nowrap">Služba / Logger</th>
+                <th class="p-3 w-[180px] whitespace-nowrap">Endpoint / Path</th>
+                <th class="p-3 w-[120px] whitespace-nowrap">Tenant ID</th>
+                <th class="p-3 w-[100px] whitespace-nowrap">Server (Host)</th>
+                <th class="p-3 w-[140px] whitespace-nowrap">Trace ID</th>
+                <th class="p-3 w-[90px] text-center whitespace-nowrap">Akce</th>
               </tr>
             </thead>
             <tbody id="gridTelemetryBody" class="divide-y divide-gray-800/60 text-gray-300">
@@ -4912,8 +4912,8 @@
           <td class="p-3 whitespace-nowrap">
             ${renderTelemetryLevelBadge(level)}
           </td>
-          <td class="p-3">
-            <div class="line-clamp-2 text-xs font-mono text-gray-200 cursor-pointer hover:text-white" onclick="openItemModal('telemetry', ${index}, 'info')" title="Kliknutím zobrazíte celý detail:\n${escapeHtml(message)}">
+          <td class="p-3 min-w-[280px] max-w-[420px] overflow-hidden">
+            <div class="truncate text-xs font-mono text-gray-200 cursor-pointer hover:text-white" onclick="openItemModal('telemetry', ${index}, 'info')" title="Kliknutím zobrazíte celý detail:\n${escapeHtml(message)}">
               ${escapeHtml(message)}
             </div>
             ${item.Error && item.Error.Message && item.Error.Message !== message ? `
