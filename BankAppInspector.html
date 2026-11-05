@@ -1109,7 +1109,7 @@
                   </div>
                 </div>
 
-                <div class="space-y-1.5 font-mono">
+                <div class="space-y-1.5">
                   <label class="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/80 cursor-pointer transition select-none">
                     <span class="flex items-center gap-2">
                       <input type="checkbox" id="chkLvlFatal" value="Fatal" checked onchange="onTelemetryLevelCheckboxChange()"
@@ -4730,18 +4730,18 @@
     function renderTelemetryLevelBadge(level) {
       const lvl = String(level || 'Info').toUpperCase();
       if (lvl.includes('CRITICAL') || lvl.includes('FATAL')) {
-        return `<span class="px-2 py-0.5 rounded text-xs font-bold font-mono bg-rose-950 text-rose-300 border border-rose-700/80 shadow-sm animate-pulse flex items-center gap-1"><i class="fa-solid fa-radiation text-[10px]"></i> ${escapeHtml(level)}</span>`;
+        return `<span class="px-2 py-0.5 rounded text-xs font-semibold bg-rose-950 text-rose-300 border border-rose-700/80 shadow-sm animate-pulse flex items-center gap-1"><i class="fa-solid fa-radiation text-[10px]"></i> ${escapeHtml(level)}</span>`;
       }
       if (lvl.includes('ERROR')) {
-        return `<span class="px-2 py-0.5 rounded text-xs font-bold font-mono bg-red-950 text-red-300 border border-red-700/80 shadow-sm flex items-center gap-1"><i class="fa-solid fa-circle-exclamation text-[10px] text-red-400"></i> ${escapeHtml(level)}</span>`;
+        return `<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-950 text-red-300 border border-red-700/80 shadow-sm flex items-center gap-1"><i class="fa-solid fa-circle-exclamation text-[10px] text-red-400"></i> ${escapeHtml(level)}</span>`;
       }
       if (lvl.includes('WARN')) {
-        return `<span class="px-2 py-0.5 rounded text-xs font-bold font-mono bg-amber-950 text-amber-300 border border-amber-700/80 shadow-sm flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation text-[10px] text-amber-400"></i> ${escapeHtml(level)}</span>`;
+        return `<span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-950 text-amber-300 border border-amber-700/80 shadow-sm flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation text-[10px] text-amber-400"></i> ${escapeHtml(level)}</span>`;
       }
       if (lvl.includes('INFO')) {
-        return `<span class="px-2 py-0.5 rounded text-xs font-medium font-mono bg-blue-950 text-blue-300 border border-blue-700/80 shadow-sm flex items-center gap-1"><i class="fa-solid fa-info text-[10px] text-blue-400"></i> ${escapeHtml(level)}</span>`;
+        return `<span class="px-2 py-0.5 rounded text-xs font-semibold bg-blue-950 text-blue-300 border border-blue-700/80 shadow-sm flex items-center gap-1"><i class="fa-solid fa-info text-[10px] text-blue-400"></i> ${escapeHtml(level)}</span>`;
       }
-      return `<span class="px-2 py-0.5 rounded text-xs font-medium font-mono bg-gray-800 text-gray-300 border border-gray-700 shadow-sm">${escapeHtml(level || '-')}</span>`;
+      return `<span class="px-2 py-0.5 rounded text-xs font-semibold bg-gray-800 text-gray-300 border border-gray-700 shadow-sm">${escapeHtml(level || '-')}</span>`;
     }
 
     function renderTraceIdCell(traceId) {
@@ -4906,37 +4906,37 @@
 
         return `
         <tr class="hover:bg-gray-800/40 transition">
-          <td class="p-3 font-mono text-xs whitespace-nowrap text-gray-400" title="${escapeHtml(item.Timestamp || '')}">
+          <td class="p-3 text-xs text-gray-400 whitespace-nowrap" title="${escapeHtml(item.Timestamp || '')}">
             ${timeStr}
           </td>
           <td class="p-3 whitespace-nowrap">
             ${renderTelemetryLevelBadge(level)}
           </td>
           <td class="p-3 min-w-[280px] max-w-[420px] overflow-hidden">
-            <div class="truncate text-xs font-mono text-gray-200 cursor-pointer hover:text-white" onclick="openItemModal('telemetry', ${index}, 'info')" title="Kliknutím zobrazíte celý detail:\n${escapeHtml(message)}">
+            <div class="truncate text-xs text-gray-200 cursor-pointer hover:text-white" onclick="openItemModal('telemetry', ${index}, 'info')" title="Kliknutím zobrazíte celý detail:\n${escapeHtml(message)}">
               ${escapeHtml(message)}
             </div>
             ${item.Error && item.Error.Message && item.Error.Message !== message ? `
-              <div class="text-[11px] text-red-400 font-mono truncate mt-0.5">
+              <div class="text-[11px] text-red-400 truncate mt-0.5">
                 <i class="fa-solid fa-bug text-[10px]"></i> ${escapeHtml(item.Error.Message)}
               </div>
             ` : ''}
           </td>
           <td class="p-3 text-xs whitespace-nowrap" title="${escapeHtml(fullLogger)}">
             <div class="font-medium text-gray-200">${escapeHtml(serviceName)}</div>
-            <div class="text-[11px] text-gray-400 font-mono truncate max-w-[160px]">${escapeHtml(logger)}</div>
+            <div class="text-[11px] text-gray-400 truncate max-w-[160px]">${escapeHtml(logger)}</div>
           </td>
-          <td class="p-3 font-mono text-xs text-teal-400 truncate max-w-[200px]" title="${escapeHtml(path)}">
+          <td class="p-3 text-xs text-teal-400 truncate max-w-[200px]" title="${escapeHtml(path)}">
             ${escapeHtml(path)}
           </td>
-          <td class="p-3 whitespace-nowrap text-xs font-mono">
+          <td class="p-3 whitespace-nowrap text-xs">
             ${tenantId ? `
               <span class="px-2 py-0.5 rounded bg-gray-900 border border-gray-700 text-gray-300 truncate max-w-[120px] inline-block align-middle" title="${escapeHtml(tenantId)}">
                 ${escapeHtml(tenantId.split('-')[0] || tenantId)}
               </span>
             ` : `<span class="text-gray-600">-</span>`}
           </td>
-          <td class="p-3 whitespace-nowrap font-mono text-xs text-gray-400">
+          <td class="p-3 whitespace-nowrap text-xs text-gray-400">
             <span class="px-2 py-0.5 rounded bg-gray-900/60 border border-gray-800">${escapeHtml(host)}</span>
           </td>
           <td class="p-3 whitespace-nowrap">
