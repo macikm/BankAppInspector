@@ -764,6 +764,9 @@
         <a id="btnSwagger" href="https://avaplace.com/api/asoleu/bankapp/swagger" target="_blank" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-md border border-gray-700 flex items-center gap-1.5 transition">
           <i class="fa-solid fa-code text-indigo-400"></i> Swagger API
         </a>
+        <a id="btnSwaggerTm" href="https://avaplace.com/api/asol/tm/swagger/" target="_blank" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-md border border-gray-700 flex items-center gap-1.5 transition" title="Swagger UI pro Telemetry API (Logs, Metrics, Traces)">
+          <i class="fa-solid fa-satellite-dish text-rose-400"></i> Swagger Telemetrie
+        </a>
       </div>
     </div>
 
@@ -781,9 +784,13 @@
         <i class="fa-solid fa-money-bill-transfer text-emerald-500"></i>
         <span>3. Dávkové Příkazy (Payments API)</span>
       </button>
+      <button onclick="switchTab('tab-telemetry')" id="tabBtn-telemetry" class="tab-btn px-5 py-3 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-satellite-dish text-rose-500"></i>
+        <span>4. Telemetrie & Logy (Telemetry API)</span>
+      </button>
       <button onclick="switchTab('tab-raw')" id="tabBtn-raw" class="tab-btn px-5 py-3 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center gap-2 whitespace-nowrap">
         <i class="fa-solid fa-terminal text-indigo-400"></i>
-        <span>4. Raw Logy & API Konzola</span>
+        <span>5. Raw Logy & API Konzola</span>
       </button>
     </div>
 
@@ -1068,7 +1075,101 @@
       </div>
     </div>
 
-    <!-- TAB 4: RAW LOGS -->
+    <!-- TAB 4: TELEMETRIE (TELEMETRY LOGS) -->
+    <div id="tab-telemetry" class="tab-content hidden space-y-6">
+      <div class="glass-panel rounded-xl overflow-hidden shadow-lg border border-rose-500/10">
+        <div class="p-4 border-b border-gray-800 flex flex-wrap items-center justify-between gap-4 bg-gray-900/40">
+          <button type="button" onclick="toggleSection('secBodyTelemetry')" class="flex items-center space-x-2 text-left focus:outline-none group">
+            <i id="secChevronTelemetry" class="fa-solid fa-chevron-down text-rose-500 text-sm transition-transform duration-200"></i>
+            <i class="fa-solid fa-satellite-dish text-rose-500"></i>
+            <h2 class="font-semibold text-lg text-gray-100 group-hover:text-rose-400 transition">Telemetrie & Systémové Chyby (Telemetry Logs)</h2>
+            <span id="cntTelemetry" class="px-2.5 py-0.5 rounded-full bg-rose-950 text-rose-400 text-xs font-mono font-bold border border-rose-800/80">0</span>
+          </button>
+
+          <!-- Dynamic Filters & Pagination for Telemetry -->
+          <div class="flex flex-wrap items-center gap-3" onclick="event.stopPropagation()">
+            <!-- Level Filter -->
+            <select id="filterLevelTelemetry" onchange="fetchTelemetryData(true)" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-rose-400 focus:outline-none focus:border-rose-500 font-medium">
+              <option value="ERRORS_CRITICAL" selected>Úroveň: Chyby & Kritické (Error, Critical, Fatal)</option>
+              <option value="ALL_ERRORS_WARNINGS">Úroveň: Chyby & Varování (+ Warning)</option>
+              <option value="ALL">Všechny úrovně (včetně Info)</option>
+              <option value="Error">Pouze Error</option>
+              <option value="Critical">Pouze Critical</option>
+              <option value="Fatal">Pouze Fatal</option>
+              <option value="Warning">Pouze Warning</option>
+              <option value="Information">Pouze Information</option>
+            </select>
+
+            <!-- Host / Environment Filter -->
+            <select id="filterHostTelemetry" onchange="fetchTelemetryData(true)" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-rose-500">
+              <option value="AUTO" selected>Host: Auto (dle prostředí)</option>
+              <option value="ava-prod">ava-prod (Produkce)</option>
+              <option value="ava-alpha">ava-alpha (Alpha)</option>
+              <option value="AVAP-01A">AVAP-01A</option>
+              <option value="DEMO-A">DEMO-A</option>
+              <option value="ALL">Všechny servery (bez filtru Host)</option>
+            </select>
+
+            <!-- Tenant Scope Filter -->
+            <select id="filterTenantTelemetry" onchange="fetchTelemetryData(true)" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-rose-500">
+              <option value="ALL" selected>Tenant: Všichni (celá BankApp)</option>
+              <option value="CURRENT">Tenant: Pouze aktuální tenant</option>
+            </select>
+
+            <!-- Search box -->
+            <div class="relative flex items-center">
+              <input type="text" id="searchTelemetry" oninput="onSearchInput('searchTelemetry', 'clearTelemetry', applyFiltersTelemetry)" placeholder="Hledat ve zprávě, loggeru, path..." class="px-3 py-1.5 pr-8 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-rose-500 w-56">
+              <button id="clearTelemetry" onclick="clearSearchInput('searchTelemetry', 'clearTelemetry', applyFiltersTelemetry)" title="Vymazat vyhledávání" class="hidden absolute right-2 text-gray-400 hover:text-gray-100 px-1 py-0.5 text-xs">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <!-- Per-Section Pagination Controls for Telemetry -->
+            <div class="flex items-center gap-1.5 bg-gray-950/80 px-2.5 py-1 rounded-lg border border-gray-800 text-xs">
+              <span class="text-gray-400">Načíst:</span>
+              <select id="pageSizeTelemetry" onchange="changeTelemetryPageSize(this.value)" class="bg-transparent text-rose-400 font-semibold focus:outline-none">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="250">250</option>
+                <option value="500">500</option>
+              </select>
+              <div class="h-3 w-px bg-gray-800 mx-1"></div>
+              <button onclick="changeTelemetryPage(-1)" title="Předchozí strana" class="text-gray-400 hover:text-white px-1"><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
+              <span class="font-mono text-gray-200">Strana <strong id="lblPageTelemetry" class="text-rose-400">1</strong></span>
+              <button onclick="changeTelemetryPage(1)" title="Další strana" class="text-gray-400 hover:text-white px-1"><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+            </div>
+
+            <!-- Single Refresh Button for Telemetry -->
+            <button onclick="fetchTelemetryData(true)" title="Znovu načíst data telemetrie" class="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-rose-400 rounded-lg border border-gray-700 flex items-center gap-1 text-xs transition">
+              <i class="fa-solid fa-arrows-rotate" id="refreshIconTelemetry"></i> Obnovit
+            </button>
+          </div>
+        </div>
+
+        <div id="secBodyTelemetry" class="overflow-x-auto resizable-grid scrollbar-thin transition-all">
+          <table class="w-full text-left text-sm" id="gridTelemetryTable">
+            <thead class="bg-gray-900/90 text-gray-400 uppercase text-xs sticky top-0 z-10 backdrop-blur-md">
+              <tr>
+                <th class="p-3">Čas</th>
+                <th class="p-3">Úroveň</th>
+                <th class="p-3">Zpráva (Message)</th>
+                <th class="p-3">Služba / Logger</th>
+                <th class="p-3">Endpoint / Path</th>
+                <th class="p-3">Tenant ID</th>
+                <th class="p-3">Server (Host)</th>
+                <th class="p-3">Trace ID</th>
+                <th class="p-3 text-center">Akce</th>
+              </tr>
+            </thead>
+            <tbody id="gridTelemetryBody" class="divide-y divide-gray-800/60 text-gray-300">
+              <tr><td colspan="9" class="p-6 text-center text-gray-500">Zatím nebyla načtena žádná data telemetrie.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: RAW LOGS -->
     <div id="tab-raw" class="tab-content hidden space-y-6">
       <div class="glass-panel rounded-xl p-4 space-y-4">
         <div class="flex justify-between items-center">
@@ -1269,7 +1370,8 @@
       erp: { page: 1, pageSize: 100 },
       stmt: { page: 1, pageSize: 100 },
       bank: { page: 1, pageSize: 100 },
-      pay: { page: 1, pageSize: 100 }
+      pay: { page: 1, pageSize: 100 },
+      telemetry: { page: 1, pageSize: 100 }
     };
 
     // ERP pagination handlers
@@ -1354,6 +1456,24 @@
       await fetchPaymentsData();
     }
 
+    // Telemetry pagination handlers
+    async function changeTelemetryPage(delta) {
+      if (!paginationState.telemetry) paginationState.telemetry = { page: 1, pageSize: 100 };
+      paginationState.telemetry.page = Math.max(1, paginationState.telemetry.page + delta);
+      const lbl = document.getElementById('lblPageTelemetry');
+      if (lbl) lbl.textContent = paginationState.telemetry.page;
+      await fetchTelemetryData(true);
+    }
+    async function changeTelemetryPageSize(val) {
+      const size = parseInt(val) || 100;
+      if (!paginationState.telemetry) paginationState.telemetry = { page: 1, pageSize: 100 };
+      paginationState.telemetry.pageSize = size;
+      paginationState.telemetry.page = 1;
+      const lbl = document.getElementById('lblPageTelemetry');
+      if (lbl) lbl.textContent = 1;
+      await fetchTelemetryData(true);
+    }
+
     function onDatePresetChanged(preset) {
       dateFilter.preset = preset;
       const customContainer = document.getElementById('customDateRange');
@@ -1412,6 +1532,9 @@
       applyFiltersBankMsgs();
       applyFiltersErp();
       renderPaymentsGrid(rawPayments);
+      if (isAuthenticated() && (!document.getElementById('tab-telemetry').classList.contains('hidden') || (rawTelemetryLogs && rawTelemetryLogs.length > 0))) {
+        fetchTelemetryData(false);
+      }
     }
 
     function isItemInDateRange(item) {
@@ -2491,6 +2614,8 @@
       rawStatements = [];
       rawBankMessages = [];
       rawPayments = [];
+      rawTelemetryLogs = [];
+      currentFilteredTelemetry = [];
       statementMismatchCache = {};
       statementReqCache = {};
       paymentTxCache = {};
@@ -2508,6 +2633,8 @@
       rawStatements = [];
       rawBankMessages = [];
       rawPayments = [];
+      rawTelemetryLogs = [];
+      currentFilteredTelemetry = [];
       statementMismatchCache = {};
       statementReqCache = {};
       paymentTxCache = {};
@@ -2541,20 +2668,24 @@
       const tbodyStmt = document.getElementById('gridStatementsBody');
       const tbodyBank = document.getElementById('gridBankMessagesBody');
       const tbodyPay = document.getElementById('gridPaymentsBody');
+      const tbodyTelemetry = document.getElementById('gridTelemetryBody');
 
       if (tbodyErp) tbodyErp.innerHTML = lockedHtml(10, 'ERP Požadavky');
       if (tbodyStmt) tbodyStmt.innerHTML = lockedHtml(9, 'Výpisy');
       if (tbodyBank) tbodyBank.innerHTML = lockedHtml(9, 'Bankovní Zprávy');
       if (tbodyPay) tbodyPay.innerHTML = lockedHtml(7, 'Dávkové Příkazy');
+      if (tbodyTelemetry) tbodyTelemetry.innerHTML = lockedHtml(9, 'Telemetrie');
 
       const cntErp = document.getElementById('cntErp');
       const cntStmt = document.getElementById('cntStatements');
       const cntBank = document.getElementById('cntBank');
       const cntPay = document.getElementById('cntPayments');
+      const cntTelemetry = document.getElementById('cntTelemetry');
       if (cntErp) cntErp.textContent = '0';
       if (cntStmt) cntStmt.textContent = '0';
       if (cntBank) cntBank.textContent = '0';
       if (cntPay) cntPay.textContent = '0';
+      if (cntTelemetry) cntTelemetry.textContent = '0';
     }
 
     async function obtainOAuthToken(silent = false) {
@@ -2962,6 +3093,29 @@
       }
     }
 
+    async function copyToClipboard(text, successMsg = 'Zkopírováno do schránky') {
+      if (!text) return;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.left = '-999999px';
+          ta.style.top = '-999999px';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+        showToast(successMsg, 'success', 2000);
+      } catch (err) {
+        showToast('Kopírování selhalo: ' + err.message, 'error', 2500);
+      }
+    }
+
     // Initialize Header tenant dropdown & saved theme
     document.addEventListener('DOMContentLoaded', async () => {
       const savedTheme = localStorage.getItem('bankapp_theme') || 'dark';
@@ -3361,10 +3515,16 @@
     function updateEnvUrls() {
       const env = document.getElementById('inputEnv').value;
       const swaggerBtn = document.getElementById('btnSwagger');
-      if (env.includes('localhost')) {
-        swaggerBtn.href = `${env}/swagger/index.html`;
-      } else {
-        swaggerBtn.href = `${env}/api/asoleu/bankapp/swagger`;
+      if (swaggerBtn) {
+        if (env.includes('localhost')) {
+          swaggerBtn.href = `${env}/swagger/index.html`;
+        } else {
+          swaggerBtn.href = `${env}/api/asoleu/bankapp/swagger`;
+        }
+      }
+      const swaggerTmBtn = document.getElementById('btnSwaggerTm');
+      if (swaggerTmBtn) {
+        swaggerTmBtn.href = `${env}/api/asol/tm/swagger/`;
       }
     }
 
@@ -3377,8 +3537,14 @@
 
       document.getElementById(tabId).classList.remove('hidden');
       const activeBtn = document.getElementById('tabBtn-' + tabId.replace('tab-', ''));
-      activeBtn.classList.remove('border-transparent', 'text-gray-400');
-      activeBtn.classList.add('border-blue-500', 'text-blue-400');
+      if (activeBtn) {
+        activeBtn.classList.remove('border-transparent', 'text-gray-400');
+        activeBtn.classList.add('border-blue-500', 'text-blue-400');
+      }
+
+      if (tabId === 'tab-telemetry' && (!rawTelemetryLogs || rawTelemetryLogs.length === 0) && isAuthenticated()) {
+        fetchTelemetryData(false);
+      }
     }
 
     function updateStatusUI(connected, text, error = null) {
@@ -3473,11 +3639,17 @@
         }
       }
 
-      const apiRoot = config.baseUrl.includes('localhost')
-        ? config.baseUrl
-        : `${config.baseUrl}/api/asoleu/bankapp`;
-
-      const url = `${apiRoot}${endpoint}`;
+      let url;
+      if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+        url = endpoint;
+      } else if (endpoint.startsWith('/api/asol/')) {
+        url = `${config.baseUrl}${endpoint}`;
+      } else {
+        const apiRoot = config.baseUrl.includes('localhost')
+          ? config.baseUrl
+          : `${config.baseUrl}/api/asoleu/bankapp`;
+        url = `${apiRoot}${endpoint}`;
+      }
 
       const headers = {
         'Content-Type': 'application/json',
@@ -3641,11 +3813,13 @@
       const tbodyStmt = document.getElementById('gridStatementsBody');
       const tbodyBank = document.getElementById('gridBankMessagesBody');
       const tbodyPay = document.getElementById('gridPaymentsBody');
+      const tbodyTelemetry = document.getElementById('gridTelemetryBody');
 
       if (tbodyErp) tbodyErp.innerHTML = loadingHtml(10, 'ERP Požadavky');
       if (tbodyStmt) tbodyStmt.innerHTML = loadingHtml(9, 'Výpisy');
       if (tbodyBank) tbodyBank.innerHTML = loadingHtml(9, 'Bankovní Zprávy');
       if (tbodyPay) tbodyPay.innerHTML = loadingHtml(7, 'Dávkové Příkazy');
+      if (tbodyTelemetry) tbodyTelemetry.innerHTML = loadingHtml(9, 'Telemetrie');
     }
 
     async function refreshData() {
@@ -3669,7 +3843,8 @@
           fetchErpData(),
           fetchStatementsData(),
           fetchBankData(),
-          fetchPaymentsData()
+          fetchPaymentsData(),
+          fetchTelemetryData(false)
         ]);
 
         const timeStr = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -3701,6 +3876,7 @@
       if (listType === 'statements') return currentFilteredStatements;
       if (listType === 'bank') return currentFilteredBank;
       if (listType === 'payments') return currentFilteredPayments;
+      if (listType === 'telemetry') return currentFilteredTelemetry;
       return [];
     }
 
@@ -3742,7 +3918,7 @@
       if (posLabel) posLabel.textContent = `${index + 1} / ${total}`;
 
       const action = modalNavContext.actionType;
-      const itemCode = item.code || item.requestReferenceId || item.id || `#${index + 1}`;
+      const itemCode = item.code || item.requestReferenceId || item.id || item.Id || `#${index + 1}`;
 
       if (action === 'request') {
         const linked = (modalNavContext.listType === 'erp') ? findLinkedStatement(item) : null;
@@ -3774,6 +3950,7 @@
         const typeLabel = modalNavContext.listType === 'erp' ? 'ERP Zprávy'
           : modalNavContext.listType === 'statements' ? 'Výpisu'
           : modalNavContext.listType === 'bank' ? 'Bank Zprávy'
+          : modalNavContext.listType === 'telemetry' ? 'Záznamu Telemetrie'
           : 'Platby';
         showDetailModal(`Detail ${typeLabel} (${itemCode})`, item);
       }
@@ -3785,20 +3962,24 @@
       const searchStmt = document.getElementById('searchStmt');
       const searchBank = document.getElementById('searchBank');
       const searchPayments = document.getElementById('searchPayments');
+      const searchTelemetry = document.getElementById('searchTelemetry');
       if (searchErp) searchErp.value = '';
       if (searchStmt) searchStmt.value = '';
       if (searchBank) searchBank.value = '';
       if (searchPayments) searchPayments.value = '';
+      if (searchTelemetry) searchTelemetry.value = '';
 
       // Clear search button X icons
       const clearErp = document.getElementById('clearErp');
       const clearStmt = document.getElementById('clearStmt');
       const clearBank = document.getElementById('clearBank');
       const clearPayments = document.getElementById('clearPayments');
+      const clearTelemetry = document.getElementById('clearTelemetry');
       if (clearErp) clearErp.classList.add('hidden');
       if (clearStmt) clearStmt.classList.add('hidden');
       if (clearBank) clearBank.classList.add('hidden');
       if (clearPayments) clearPayments.classList.add('hidden');
+      if (clearTelemetry) clearTelemetry.classList.add('hidden');
 
       // 2. Reset dropdown filters
       const filterTypeErp = document.getElementById('filterTypeErp');
@@ -3833,6 +4014,7 @@
       applyFiltersStatements();
       applyFiltersBankMsgs();
       renderPaymentsGrid(rawPayments);
+      applyFiltersTelemetry();
 
       showToast("Všechny textové i stavové filtry byly vymazány.", "success", 2500);
     }
@@ -4373,6 +4555,244 @@
           </td>
         </tr>
       `;
+      }).join('');
+    }
+
+    // ==========================================
+    // 4. TELEMETRIE (TELEMETRY LOGS) LOGIC
+    // ==========================================
+    let rawTelemetryLogs = [];
+    let currentFilteredTelemetry = [];
+
+    function renderTelemetryLevelBadge(level) {
+      const lvl = String(level || 'Info').toUpperCase();
+      if (lvl.includes('CRITICAL') || lvl.includes('FATAL')) {
+        return `<span class="px-2 py-0.5 rounded text-xs font-bold font-mono bg-rose-950 text-rose-300 border border-rose-700/80 shadow-sm animate-pulse flex items-center gap-1"><i class="fa-solid fa-radiation text-[10px]"></i> ${escapeHtml(level)}</span>`;
+      }
+      if (lvl.includes('ERROR')) {
+        return `<span class="px-2 py-0.5 rounded text-xs font-bold font-mono bg-red-950 text-red-300 border border-red-700/80 shadow-sm flex items-center gap-1"><i class="fa-solid fa-circle-exclamation text-[10px] text-red-400"></i> ${escapeHtml(level)}</span>`;
+      }
+      if (lvl.includes('WARN')) {
+        return `<span class="px-2 py-0.5 rounded text-xs font-bold font-mono bg-amber-950 text-amber-300 border border-amber-700/80 shadow-sm flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation text-[10px] text-amber-400"></i> ${escapeHtml(level)}</span>`;
+      }
+      if (lvl.includes('INFO')) {
+        return `<span class="px-2 py-0.5 rounded text-xs font-medium font-mono bg-blue-950 text-blue-300 border border-blue-700/80 shadow-sm flex items-center gap-1"><i class="fa-solid fa-info text-[10px] text-blue-400"></i> ${escapeHtml(level)}</span>`;
+      }
+      return `<span class="px-2 py-0.5 rounded text-xs font-medium font-mono bg-gray-800 text-gray-300 border border-gray-700 shadow-sm">${escapeHtml(level || '-')}</span>`;
+    }
+
+    function renderTraceIdCell(traceId) {
+      if (!traceId) return '<span class="text-gray-500">-</span>';
+      const short = traceId.length > 12 ? `${traceId.slice(0, 6)}…${traceId.slice(-6)}` : traceId;
+      return `
+        <button onclick="copyToClipboard('${escapeHtml(traceId)}', 'Trace ID zkopírováno')" title="Kopírovat kompletní Trace ID:\n${escapeHtml(traceId)}" class="px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 border border-gray-700 font-mono text-[11px] text-indigo-300 hover:text-indigo-100 flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-fingerprint text-[10px] text-indigo-400"></i>
+          <span>${escapeHtml(short)}</span>
+          <i class="fa-regular fa-copy text-[10px] opacity-60"></i>
+        </button>
+      `;
+    }
+
+    async function fetchTelemetryData(showToastNotice = false) {
+      if (!isAuthenticated()) {
+        const tbody = document.getElementById('gridTelemetryBody');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-gray-500">Pro zobrazení telemetrie se prosím nejprve přihlaste.</td></tr>`;
+        return;
+      }
+
+      const icon = document.getElementById('refreshIconTelemetry');
+      if (icon) icon.classList.add('fa-spin');
+      if (showToastNotice) {
+        showToast('Načítám telemetrické logy ze služby TM...', 'loading', 0);
+      }
+
+      const page = paginationState.telemetry ? paginationState.telemetry.page : 1;
+      const pageSize = paginationState.telemetry ? paginationState.telemetry.pageSize : 100;
+      const skip = (page - 1) * pageSize;
+      const top = pageSize;
+
+      // Filter construction
+      const filterParts = [];
+
+      // 1. App code & service
+      filterParts.push(`(metadata/asol_application_code eq 'ASOLEU-BankApp-AP-')`);
+      filterParts.push(`(metadata/asol_service_name eq 'ASOLEU.BankApp')`);
+
+      // 2. Level filter
+      const levelEl = document.getElementById('filterLevelTelemetry');
+      const levelVal = levelEl ? levelEl.value : 'ERRORS_CRITICAL';
+      if (levelVal === 'ERRORS_CRITICAL') {
+        filterParts.push(`(Log/Level in ('Error', 'Critical', 'Fatal'))`);
+      } else if (levelVal === 'ALL_ERRORS_WARNINGS') {
+        filterParts.push(`(Log/Level in ('Error', 'Critical', 'Fatal', 'Warning'))`);
+      } else if (levelVal === 'Error') {
+        filterParts.push(`(Log/Level in ('Error'))`);
+      } else if (levelVal === 'Warning') {
+        filterParts.push(`(Log/Level in ('Warning'))`);
+      } else if (levelVal === 'Critical') {
+        filterParts.push(`(Log/Level in ('Critical'))`);
+      } else if (levelVal === 'Fatal') {
+        filterParts.push(`(Log/Level in ('Fatal'))`);
+      } else if (levelVal === 'Information') {
+        filterParts.push(`(Log/Level in ('Information'))`);
+      } // 'ALL' adds no level filter
+
+      // 3. Host filter
+      const hostEl = document.getElementById('filterHostTelemetry');
+      const hostVal = hostEl ? hostEl.value : 'AUTO';
+      let targetHost = hostVal;
+      if (hostVal === 'AUTO') {
+        if (config.baseUrl.includes('alpha')) {
+          targetHost = 'ava-alpha';
+        } else if (config.baseUrl.includes('avaplace.com')) {
+          targetHost = 'ava-prod';
+        } else {
+          targetHost = 'ALL';
+        }
+      }
+      if (targetHost && targetHost !== 'ALL') {
+        filterParts.push(`(Host/Hostname in ('${targetHost}'))`);
+      }
+
+      // 4. Tenant filter
+      const tenantEl = document.getElementById('filterTenantTelemetry');
+      const tenantScope = tenantEl ? tenantEl.value : 'ALL';
+      if (tenantScope === 'CURRENT' && config.tenantId) {
+        filterParts.push(`(metadata/asol_tenant_id eq '${config.tenantId}')`);
+      }
+
+      // 5. Global Date filter
+      if (dateFilter.from) {
+        const fromDateStr = dateFilter.from.includes('T') ? dateFilter.from : `${dateFilter.from}T00:00:00Z`;
+        filterParts.push(`(timestamp ge ${fromDateStr})`);
+      }
+      if (dateFilter.to) {
+        const toDateStr = dateFilter.to.includes('T') ? dateFilter.to : `${dateFilter.to}T23:59:59Z`;
+        filterParts.push(`(timestamp le ${toDateStr})`);
+      }
+
+      const filterQuery = filterParts.join(' and ');
+      const queryParams = `?filter=${encodeURIComponent(filterQuery)}&top=${top}&skip=${skip}&orderby=${encodeURIComponent('timestamp desc')}`;
+      const endpoint = `/api/asol/tm/api/v2/Logs${queryParams}`;
+
+      try {
+        const res = await fetchApi(endpoint, 'GET');
+        if (res && res.value && Array.isArray(res.value)) {
+          rawTelemetryLogs = res.value;
+        } else if (Array.isArray(res)) {
+          rawTelemetryLogs = res;
+        } else {
+          rawTelemetryLogs = [];
+        }
+        if (showToastNotice) {
+          showToast(`Telemetrie načtena (${rawTelemetryLogs.length} záznamů)`, 'success', 2500);
+        }
+      } catch (err) {
+        logConsole('Načítání telemetrie selhalo', err.message);
+        rawTelemetryLogs = [];
+        if (showToastNotice) {
+          showToast(`Chyba načítání telemetrie: ${err.message}`, 'error', 4000);
+        }
+      } finally {
+        if (icon) icon.classList.remove('fa-spin');
+        applyFiltersTelemetry();
+      }
+    }
+
+    function applyFiltersTelemetry() {
+      const searchInput = document.getElementById('searchTelemetry');
+      const q = (searchInput ? searchInput.value : '').trim().toLowerCase();
+
+      let items = rawTelemetryLogs || [];
+      if (q) {
+        items = items.filter(item => {
+          const msg = (item.Message || '').toLowerCase();
+          const logger = (item.Log?.Logger || '').toLowerCase();
+          const path = (item.Metadata?.Request_path || '').toLowerCase();
+          const tid = (item.Metadata?.Trace_id || '').toLowerCase();
+          const tenant = (item.Metadata?.Asol_tenant_id || item.Labels?.Asol_tenant_id || '').toLowerCase();
+          const host = (item.Host?.Hostname || '').toLowerCase();
+          const level = (item.Log?.Level || '').toLowerCase();
+          const err = item.Error ? JSON.stringify(item.Error).toLowerCase() : '';
+          return msg.includes(q) || logger.includes(q) || path.includes(q) || tid.includes(q) || tenant.includes(q) || host.includes(q) || level.includes(q) || err.includes(q);
+        });
+      }
+
+      currentFilteredTelemetry = items;
+      renderTelemetryGrid(items);
+    }
+
+    function renderTelemetryGrid(items) {
+      const tbody = document.getElementById('gridTelemetryBody');
+      const cntEl = document.getElementById('cntTelemetry');
+      if (cntEl) cntEl.textContent = items ? items.length : 0;
+
+      if (!items || items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-gray-500">Žádné telemetrické záznamy neodpovídají zadaným kritériím nebo filtru.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = items.map((item, index) => {
+        const timeStr = item.Timestamp ? new Date(item.Timestamp).toLocaleString('cs-CZ', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3
+        }) : '-';
+
+        const level = item.Log?.Level || 'Info';
+        const message = item.Message || (item.Error && item.Error.Message) || '-';
+        const serviceName = item.Metadata?.Asol_service_name || 'BankApp';
+        const logger = item.Log?.Logger ? item.Log.Logger.split('.').slice(-2).join('.') : '-';
+        const fullLogger = item.Log?.Logger || '';
+        const path = item.Metadata?.Request_path || '-';
+        const tenantId = item.Metadata?.Asol_tenant_id || item.Labels?.Asol_tenant_id || null;
+        const host = item.Host?.Hostname || '-';
+        const traceId = item.Metadata?.Trace_id || item.Transaction?.Id || '';
+
+        return `
+        <tr class="hover:bg-gray-800/40 transition">
+          <td class="p-3 font-mono text-xs whitespace-nowrap text-gray-400" title="${escapeHtml(item.Timestamp || '')}">
+            ${timeStr}
+          </td>
+          <td class="p-3 whitespace-nowrap">
+            ${renderTelemetryLevelBadge(level)}
+          </td>
+          <td class="p-3">
+            <div class="line-clamp-2 text-xs font-mono text-gray-200 cursor-pointer hover:text-white" onclick="openItemModal('telemetry', ${index}, 'info')" title="Kliknutím zobrazíte celý detail:\n${escapeHtml(message)}">
+              ${escapeHtml(message)}
+            </div>
+            ${item.Error && item.Error.Message && item.Error.Message !== message ? `
+              <div class="text-[11px] text-red-400 font-mono truncate mt-0.5">
+                <i class="fa-solid fa-bug text-[10px]"></i> ${escapeHtml(item.Error.Message)}
+              </div>
+            ` : ''}
+          </td>
+          <td class="p-3 text-xs whitespace-nowrap" title="${escapeHtml(fullLogger)}">
+            <div class="font-medium text-gray-200">${escapeHtml(serviceName)}</div>
+            <div class="text-[11px] text-gray-400 font-mono truncate max-w-[160px]">${escapeHtml(logger)}</div>
+          </td>
+          <td class="p-3 font-mono text-xs text-teal-400 truncate max-w-[200px]" title="${escapeHtml(path)}">
+            ${escapeHtml(path)}
+          </td>
+          <td class="p-3 whitespace-nowrap text-xs font-mono">
+            ${tenantId ? `
+              <span class="px-2 py-0.5 rounded bg-gray-900 border border-gray-700 text-gray-300 truncate max-w-[120px] inline-block align-middle" title="${escapeHtml(tenantId)}">
+                ${escapeHtml(tenantId.split('-')[0] || tenantId)}
+              </span>
+            ` : `<span class="text-gray-600">-</span>`}
+          </td>
+          <td class="p-3 whitespace-nowrap font-mono text-xs text-gray-400">
+            <span class="px-2 py-0.5 rounded bg-gray-900/60 border border-gray-800">${escapeHtml(host)}</span>
+          </td>
+          <td class="p-3 whitespace-nowrap">
+            ${renderTraceIdCell(traceId)}
+          </td>
+          <td class="p-3 whitespace-nowrap text-center">
+            <button onclick="openItemModal('telemetry', ${index}, 'info')" class="px-2.5 py-1 text-xs rounded font-medium btn-action-info flex items-center gap-1 mx-auto" title="Otevřít kompletní JSON záznam logu">
+              <i class="fa-solid fa-code"></i> Detail
+            </button>
+          </td>
+        </tr>
+        `;
       }).join('');
     }
 
