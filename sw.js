@@ -83,3 +83,4 @@ self.addEventListener('fetch', (event) => {
   // Fallback to network
   event.respondWith(fetch(req));
 });
+
