@@ -807,7 +807,7 @@
 
           <!-- Dynamic Filters & Pagination for ERP Messages -->
           <div class="flex flex-wrap items-center gap-3" onclick="event.stopPropagation()">
-            <select id="filterTypeErp" onchange="applyFiltersErp()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-amber-500 focus:outline-none focus:border-amber-500 font-medium">
+            <select id="filterTypeErp" onchange="onErpFilterChange()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-amber-500 focus:outline-none focus:border-amber-500 font-medium">
               <option value="ALL">Všechny typy zpráv</option>
               <option value="Payment">Příkazy / Platby (Payment)</option>
               <option value="Statement">Výpisy (Statement)</option>
@@ -815,16 +815,17 @@
               <option value="Balance">Stav účtu / Zůstatky (Balance)</option>
             </select>
 
-            <select id="filterStateErp" onchange="applyFiltersErp()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-amber-500">
+            <select id="filterStateErp" onchange="onErpFilterChange()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-amber-500">
               <option value="ALL">Všechny stavy</option>
-              <option value="ERROR">Pouze CHYBY</option>
-              <option value="SUCCESS">Pouze ÚSPĚŠNÉ</option>
-              <option value="PROCESSING">Zpracovává se</option>
+              <option value="ERROR">Pouze CHYBY (Error)</option>
+              <option value="WARNING">Pouze VAROVÁNÍ (Warning)</option>
+              <option value="SUCCESS">Pouze ÚSPĚŠNÉ (Success)</option>
+              <option value="PROCESSING">Zpracovává se (Pending)</option>
             </select>
 
             <div class="relative flex items-center">
-              <input type="text" id="searchErp" oninput="onSearchInput('searchErp', 'clearErp', applyFiltersErp)" placeholder="Hledat v ERP správach..." class="px-3 py-1.5 pr-8 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-amber-500 w-48">
-              <button id="clearErp" onclick="clearSearchInput('searchErp', 'clearErp', applyFiltersErp)" title="Vymazat vyhledávání" class="hidden absolute right-2 text-gray-400 hover:text-gray-100 px-1 py-0.5 text-xs">
+              <input type="text" id="searchErp" oninput="onSearchInputDebounced('erp', 'searchErp', 'clearErp', fetchErpData)" placeholder="Hledat v ERP zprávách..." class="px-3 py-1.5 pr-8 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-amber-500 w-48">
+              <button id="clearErp" onclick="clearSearchInputTrigger('erp', 'searchErp', 'clearErp', fetchErpData)" title="Vymazat vyhledávání" class="hidden absolute right-2 text-gray-400 hover:text-gray-100 px-1 py-0.5 text-xs">
                 <i class="fa-solid fa-xmark"></i>
               </button>
             </div>
@@ -885,11 +886,12 @@
           
           <!-- Filters & Pagination for Statements -->
           <div class="flex flex-wrap items-center gap-3" onclick="event.stopPropagation()">
-            <select id="filterStateStmt" onchange="applyFiltersStatements()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-blue-500">
+            <select id="filterStateStmt" onchange="onStmtFilterChange()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-blue-500">
               <option value="ALL">Všechny stavy</option>
-              <option value="ERROR">Pouze CHYBY</option>
-              <option value="SUCCESS">Pouze ÚSPĚŠNÉ</option>
-              <option value="PROCESSING">Zpracovává se</option>
+              <option value="ERROR">Pouze CHYBY (Error)</option>
+              <option value="WARNING">Pouze VAROVÁNÍ (Warning)</option>
+              <option value="SUCCESS">Pouze ÚSPĚŠNÉ (Success)</option>
+              <option value="PROCESSING">Zpracovává se (Pending)</option>
             </select>
 
             <select id="filterCountStmt" onchange="applyFiltersStatements()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-emerald-400 focus:outline-none focus:border-emerald-500 font-medium">
@@ -899,8 +901,8 @@
             </select>
 
             <div class="relative flex items-center">
-              <input type="text" id="searchStmt" oninput="onSearchInput('searchStmt', 'clearStmt', applyFiltersStatements)" placeholder="Hledat ve výpisech..." class="px-3 py-1.5 pr-8 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-blue-500 w-48">
-              <button id="clearStmt" onclick="clearSearchInput('searchStmt', 'clearStmt', applyFiltersStatements)" title="Vymazat vyhledávání" class="hidden absolute right-2 text-gray-400 hover:text-gray-100 px-1 py-0.5 text-xs">
+              <input type="text" id="searchStmt" oninput="onSearchInputDebounced('stmt', 'searchStmt', 'clearStmt', fetchStatementsData)" placeholder="Hledat ve výpisech..." class="px-3 py-1.5 pr-8 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-blue-500 w-48">
+              <button id="clearStmt" onclick="clearSearchInputTrigger('stmt', 'searchStmt', 'clearStmt', fetchStatementsData)" title="Vymazat vyhledávání" class="hidden absolute right-2 text-gray-400 hover:text-gray-100 px-1 py-0.5 text-xs">
                 <i class="fa-solid fa-xmark"></i>
               </button>
             </div>
@@ -955,7 +957,7 @@
           </button>
 
           <div class="flex flex-wrap items-center gap-3" onclick="event.stopPropagation()">
-            <select id="filterTypeBank" onchange="applyFiltersBankMsgs()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-indigo-400 focus:outline-none focus:border-indigo-500 font-medium">
+            <select id="filterTypeBank" onchange="onBankFilterChange()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-indigo-400 focus:outline-none focus:border-indigo-500 font-medium">
               <option value="ALL">Všechny typy zpráv</option>
               <option value="Payment">Příkazy / Platby (Payment)</option>
               <option value="Statement">Výpisy (Statement)</option>
@@ -963,16 +965,17 @@
               <option value="Balance">Stav účtu / Zůstatky (Balance)</option>
             </select>
 
-            <select id="filterStateBank" onchange="applyFiltersBankMsgs()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none">
+            <select id="filterStateBank" onchange="onBankFilterChange()" class="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none">
               <option value="ALL">Všechny stavy</option>
-              <option value="ERROR">Pouze CHYBY</option>
-              <option value="SUCCESS">Pouze ÚSPĚŠNÉ</option>
-              <option value="PROCESSING">Zpracovává se</option>
+              <option value="ERROR">Pouze CHYBY (Error)</option>
+              <option value="WARNING">Pouze VAROVÁNÍ (Warning)</option>
+              <option value="SUCCESS">Pouze ÚSPĚŠNÉ (Success)</option>
+              <option value="PROCESSING">Zpracovává se (Pending)</option>
             </select>
 
             <div class="relative flex items-center">
-              <input type="text" id="searchBank" oninput="onSearchInput('searchBank', 'clearBank', applyFiltersBankMsgs)" placeholder="Hledat v zprávách banky..." class="px-3 py-1.5 pr-8 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-indigo-500 w-48">
-              <button id="clearBank" onclick="clearSearchInput('searchBank', 'clearBank', applyFiltersBankMsgs)" title="Vymazat vyhledávání" class="hidden absolute right-2 text-gray-400 hover:text-gray-100 px-1 py-0.5 text-xs">
+              <input type="text" id="searchBank" oninput="onSearchInputDebounced('bank', 'searchBank', 'clearBank', fetchBankData)" placeholder="Hledat v zprávách banky..." class="px-3 py-1.5 pr-8 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-indigo-500 w-48">
+              <button id="clearBank" onclick="clearSearchInputTrigger('bank', 'searchBank', 'clearBank', fetchBankData)" title="Vymazat vyhledávání" class="hidden absolute right-2 text-gray-400 hover:text-gray-100 px-1 py-0.5 text-xs">
                 <i class="fa-solid fa-xmark"></i>
               </button>
             </div>
@@ -1441,70 +1444,70 @@
       telemetry: { page: 1, pageSize: 100 }
     };
 
+    function updatePageLabel(section) {
+      const p = paginationState[section];
+      if (!p) return;
+      const lblId = section === 'erp' ? 'lblPageErp' : (section === 'stmt' ? 'lblPageStmt' : (section === 'bank' ? 'lblPageBank' : (section === 'pay' ? 'lblPagePay' : 'lblPageTelemetry')));
+      const lbl = document.getElementById(lblId);
+      if (!lbl) return;
+
+      if (p.totalCount !== undefined && p.totalCount !== null) {
+        const maxPages = Math.max(1, Math.ceil(p.totalCount / p.pageSize));
+        lbl.textContent = `${p.page} / ${maxPages}`;
+        lbl.title = `Strana ${p.page} z ${maxPages} (celkem nalezeno ${p.totalCount} zpráv)`;
+      } else {
+        lbl.textContent = p.page;
+      }
+    }
+
     // ERP pagination handlers
     async function changeErpPage(delta) {
-      paginationState.erp.page = Math.max(1, paginationState.erp.page + delta);
-      const lbl = document.getElementById('lblPageErp');
-      if (lbl) lbl.textContent = paginationState.erp.page;
-
-      paginationState.stmt.page = paginationState.erp.page;
-      const lblStmt = document.getElementById('lblPageStmt');
-      if (lblStmt) lblStmt.textContent = paginationState.stmt.page;
-
-      await Promise.all([fetchErpData(), fetchStatementsData()]);
+      const p = paginationState.erp;
+      const maxPages = (p.totalCount !== undefined && p.totalCount !== null) ? Math.max(1, Math.ceil(p.totalCount / p.pageSize)) : 9999;
+      const newPage = Math.min(maxPages, Math.max(1, p.page + delta));
+      if (newPage === p.page) return;
+      p.page = newPage;
+      updatePageLabel('erp');
+      await fetchErpData();
     }
     async function changeErpPageSize(val) {
-      const size = parseInt(val) || 100;
-      paginationState.erp.pageSize = size;
+      paginationState.erp.pageSize = parseInt(val) || 100;
       paginationState.erp.page = 1;
-      const lbl = document.getElementById('lblPageErp');
-      if (lbl) lbl.textContent = 1;
-
-      // Keep Statements and Bank messages in sync so all ERP records have linked statement data/files loaded
-      paginationState.stmt.pageSize = size;
-      paginationState.stmt.page = 1;
-      const selStmt = document.getElementById('pageSizeStmt');
-      if (selStmt) selStmt.value = String(size);
-      const lblStmt = document.getElementById('lblPageStmt');
-      if (lblStmt) lblStmt.textContent = 1;
-
-      paginationState.bank.pageSize = size;
-      paginationState.bank.page = 1;
-      const selBank = document.getElementById('pageSizeBank');
-      if (selBank) selBank.value = String(size);
-      const lblBank = document.getElementById('lblPageBank');
-      if (lblBank) lblBank.textContent = 1;
-
-      await Promise.all([fetchErpData(), fetchStatementsData(), fetchBankData()]);
+      updatePageLabel('erp');
+      await fetchErpData();
     }
 
     // Statement pagination handlers
     async function changeStmtPage(delta) {
-      paginationState.stmt.page = Math.max(1, paginationState.stmt.page + delta);
-      const lbl = document.getElementById('lblPageStmt');
-      if (lbl) lbl.textContent = paginationState.stmt.page;
+      const p = paginationState.stmt;
+      const maxPages = (p.totalCount !== undefined && p.totalCount !== null) ? Math.max(1, Math.ceil(p.totalCount / p.pageSize)) : 9999;
+      const newPage = Math.min(maxPages, Math.max(1, p.page + delta));
+      if (newPage === p.page) return;
+      p.page = newPage;
+      updatePageLabel('stmt');
       await fetchStatementsData();
     }
     async function changeStmtPageSize(val) {
       paginationState.stmt.pageSize = parseInt(val) || 100;
       paginationState.stmt.page = 1;
-      const lbl = document.getElementById('lblPageStmt');
-      if (lbl) lbl.textContent = 1;
+      updatePageLabel('stmt');
       await fetchStatementsData();
     }
 
     // Bank pagination handlers
     async function changeBankPage(delta) {
-      paginationState.bank.page = Math.max(1, paginationState.bank.page + delta);
-      const lbl = document.getElementById('lblPageBank');
-      if (lbl) lbl.textContent = paginationState.bank.page;
+      const p = paginationState.bank;
+      const maxPages = (p.totalCount !== undefined && p.totalCount !== null) ? Math.max(1, Math.ceil(p.totalCount / p.pageSize)) : 9999;
+      const newPage = Math.min(maxPages, Math.max(1, p.page + delta));
+      if (newPage === p.page) return;
+      p.page = newPage;
+      updatePageLabel('bank');
       await fetchBankData();
     }
     async function changeBankPageSize(val) {
       paginationState.bank.pageSize = parseInt(val) || 100;
       paginationState.bank.page = 1;
-      const lbl = document.getElementById('lblPageBank');
-      if (lbl) lbl.textContent = 1;
+      updatePageLabel('bank');
       await fetchBankData();
     }
 
@@ -1539,6 +1542,118 @@
       const lbl = document.getElementById('lblPageTelemetry');
       if (lbl) lbl.textContent = 1;
       await fetchTelemetryData(true);
+    }
+
+    // Server-side filter helpers & debouncing
+    let searchDebounceTimers = {};
+    function onSearchInputDebounced(section, inputId, clearBtnId, fetchFn) {
+      const inp = document.getElementById(inputId);
+      const clearBtn = document.getElementById(clearBtnId);
+      if (clearBtn) {
+        if (inp && inp.value.trim()) {
+          clearBtn.classList.remove('hidden');
+        } else {
+          clearBtn.classList.add('hidden');
+        }
+      }
+
+      if (searchDebounceTimers[section]) {
+        clearTimeout(searchDebounceTimers[section]);
+      }
+      searchDebounceTimers[section] = setTimeout(async () => {
+        if (paginationState[section]) paginationState[section].page = 1;
+        updatePageLabel(section);
+        await fetchFn();
+      }, 350);
+    }
+
+    async function clearSearchInputTrigger(section, inputId, clearBtnId, fetchFn) {
+      const inp = document.getElementById(inputId);
+      const clearBtn = document.getElementById(clearBtnId);
+      if (inp) inp.value = '';
+      if (clearBtn) clearBtn.classList.add('hidden');
+      if (searchDebounceTimers[section]) {
+        clearTimeout(searchDebounceTimers[section]);
+      }
+      if (paginationState[section]) paginationState[section].page = 1;
+      updatePageLabel(section);
+      await fetchFn();
+    }
+
+    async function onErpFilterChange() {
+      paginationState.erp.page = 1;
+      updatePageLabel('erp');
+      await fetchErpData();
+    }
+
+    async function onStmtFilterChange() {
+      paginationState.stmt.page = 1;
+      updatePageLabel('stmt');
+      await fetchStatementsData();
+    }
+
+    async function onBankFilterChange() {
+      paginationState.bank.page = 1;
+      updatePageLabel('bank');
+      await fetchBankData();
+    }
+
+    function mapUiStateToServer(uiState) {
+      if (!uiState || uiState === 'ALL') return null;
+      if (uiState === 'ERROR') return 'Error';
+      if (uiState === 'WARNING') return 'Warning';
+      if (uiState === 'SUCCESS') return 'Success';
+      if (uiState === 'PROCESSING') return 'Pending';
+      return uiState;
+    }
+
+    function mapUiMessageTypeToServer(uiType) {
+      if (!uiType || uiType === 'ALL') return null;
+      return uiType;
+    }
+
+    function buildMaintenanceQueryParams(section) {
+      const p = paginationState[section] || { page: 1, pageSize: 100 };
+      const offset = (p.page - 1) * p.pageSize;
+      const limit = p.pageSize;
+      let params = `?Offset=${offset}&Limit=${limit}&page=${p.page}&pageSize=${p.pageSize}`;
+
+      if (dateFilter.from) params += `&from=${encodeURIComponent(dateFilter.from)}`;
+      if (dateFilter.to) {
+        const toVal = dateFilter.to.includes('T') ? dateFilter.to : `${dateFilter.to}T23:59:59`;
+        params += `&to=${encodeURIComponent(toVal)}`;
+      }
+
+      let stateVal = null;
+      let typeVal = null;
+      let searchVal = null;
+
+      if (section === 'erp') {
+        const elState = document.getElementById('filterStateErp');
+        const elType = document.getElementById('filterTypeErp');
+        const elSearch = document.getElementById('searchErp');
+        if (elState) stateVal = mapUiStateToServer(elState.value);
+        if (elType) typeVal = mapUiMessageTypeToServer(elType.value);
+        if (elSearch && elSearch.value.trim()) searchVal = elSearch.value.trim();
+      } else if (section === 'stmt') {
+        const elState = document.getElementById('filterStateStmt');
+        const elSearch = document.getElementById('searchStmt');
+        if (elState) stateVal = mapUiStateToServer(elState.value);
+        if (elSearch && elSearch.value.trim()) searchVal = elSearch.value.trim();
+      } else if (section === 'bank') {
+        const elState = document.getElementById('filterStateBank');
+        const elType = document.getElementById('filterTypeBank');
+        const elSearch = document.getElementById('searchBank');
+        if (elState) stateVal = mapUiStateToServer(elState.value);
+        if (elType) typeVal = mapUiMessageTypeToServer(elType.value);
+        if (elSearch && elSearch.value.trim()) searchVal = elSearch.value.trim();
+      }
+
+      if (stateVal) params += `&state=${encodeURIComponent(stateVal)}`;
+      if (typeVal) params += `&messageType=${encodeURIComponent(typeVal)}`;
+      if (searchVal) params += `&search=${encodeURIComponent(searchVal)}`;
+
+      return params;
     }
 
     function onDatePresetChanged(preset) {
@@ -1590,18 +1705,27 @@
       return `${year}-${month}-${day}`;
     }
 
-    function applyDateFilterAll() {
+    async function applyDateFilterAll() {
       if (dateFilter.preset === 'CUSTOM') {
         dateFilter.from = document.getElementById('dateFrom').value || null;
         dateFilter.to = document.getElementById('dateTo').value || null;
       }
-      applyFiltersStatements();
-      applyFiltersBankMsgs();
-      applyFiltersErp();
-      renderPaymentsGrid(rawPayments);
-      if (isAuthenticated() && (!document.getElementById('tab-telemetry').classList.contains('hidden') || (rawTelemetryLogs && rawTelemetryLogs.length > 0))) {
-        fetchTelemetryData(false);
-      }
+      paginationState.erp.page = 1;
+      paginationState.stmt.page = 1;
+      paginationState.bank.page = 1;
+      updatePageLabel('erp');
+      updatePageLabel('stmt');
+      updatePageLabel('bank');
+
+      await Promise.all([
+        fetchErpData(),
+        fetchStatementsData(),
+        fetchBankData(),
+        renderPaymentsGrid(rawPayments),
+        (isAuthenticated() && (!document.getElementById('tab-telemetry')?.classList.contains('hidden') || (rawTelemetryLogs && rawTelemetryLogs.length > 0)))
+          ? fetchTelemetryData(false)
+          : Promise.resolve()
+      ]);
     }
 
     function isItemInDateRange(item) {
@@ -3791,24 +3915,22 @@
     }
 
     async function fetchStatementsData() {
-      const page = paginationState.stmt.page;
-      const pageSize = paginationState.stmt.pageSize;
-      const offset = (page - 1) * pageSize;
-      const limit = pageSize;
-      let queryParams = `?Offset=${offset}&Limit=${limit}&page=${page}&pageSize=${pageSize}`;
-      if (dateFilter.from) queryParams += `&from=${encodeURIComponent(dateFilter.from)}`;
-      if (dateFilter.to) {
-        const toVal = dateFilter.to.includes('T') ? dateFilter.to : `${dateFilter.to}T23:59:59`;
-        queryParams += `&to=${encodeURIComponent(toVal)}`;
-      }
+      const queryParams = buildMaintenanceQueryParams('stmt');
 
       try {
         const maintStmt = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/StatementMessage${queryParams}`, 'GET');
         rawStatements = maintStmt.items || maintStmt.data || (Array.isArray(maintStmt) ? maintStmt : []);
+        if (maintStmt && maintStmt.totalCount !== undefined && maintStmt.totalCount !== null) {
+          paginationState.stmt.totalCount = maintStmt.totalCount;
+        } else {
+          paginationState.stmt.totalCount = rawStatements.length;
+        }
       } catch (mErr) {
         logConsole("Maintenance Výpisy selhaly", mErr.message);
         rawStatements = [];
+        paginationState.stmt.totalCount = 0;
       }
+      updatePageLabel('stmt');
       applyFiltersStatements();
       if (rawErpMessages && rawErpMessages.length > 0) {
         applyFiltersErp();
@@ -3818,24 +3940,22 @@
     }
 
     async function fetchBankData() {
-      const page = paginationState.bank.page;
-      const pageSize = paginationState.bank.pageSize;
-      const offset = (page - 1) * pageSize;
-      const limit = pageSize;
-      let queryParams = `?Offset=${offset}&Limit=${limit}&page=${page}&pageSize=${pageSize}`;
-      if (dateFilter.from) queryParams += `&from=${encodeURIComponent(dateFilter.from)}`;
-      if (dateFilter.to) {
-        const toVal = dateFilter.to.includes('T') ? dateFilter.to : `${dateFilter.to}T23:59:59`;
-        queryParams += `&to=${encodeURIComponent(toVal)}`;
-      }
+      const queryParams = buildMaintenanceQueryParams('bank');
 
       try {
         const maintBank = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/BankMessage${queryParams}`, 'GET');
         rawBankMessages = maintBank.items || maintBank.data || (Array.isArray(maintBank) ? maintBank : []);
+        if (maintBank && maintBank.totalCount !== undefined && maintBank.totalCount !== null) {
+          paginationState.bank.totalCount = maintBank.totalCount;
+        } else {
+          paginationState.bank.totalCount = rawBankMessages.length;
+        }
       } catch (mErr) {
         logConsole("Maintenance Bank Zprávy selhaly", mErr.message);
         rawBankMessages = [];
+        paginationState.bank.totalCount = 0;
       }
+      updatePageLabel('bank');
       updateTypeFilterOptions('filterTypeBank', rawBankMessages);
       applyFiltersBankMsgs();
       scanStatementDateMismatches(rawBankMessages);
@@ -3850,24 +3970,22 @@
     }
 
     async function fetchErpData() {
-      const page = paginationState.erp.page;
-      const pageSize = paginationState.erp.pageSize;
-      const offset = (page - 1) * pageSize;
-      const limit = pageSize;
-      let queryParams = `?Offset=${offset}&Limit=${limit}&page=${page}&pageSize=${pageSize}`;
-      if (dateFilter.from) queryParams += `&from=${encodeURIComponent(dateFilter.from)}`;
-      if (dateFilter.to) {
-        const toVal = dateFilter.to.includes('T') ? dateFilter.to : `${dateFilter.to}T23:59:59`;
-        queryParams += `&to=${encodeURIComponent(toVal)}`;
-      }
+      const queryParams = buildMaintenanceQueryParams('erp');
 
       try {
         const maintErp = await fetchApi(`/api/v1/Maintenance/GetMessages/${config.tenantId}/ErpMessage${queryParams}`, 'GET');
         rawErpMessages = maintErp.items || maintErp.data || (Array.isArray(maintErp) ? maintErp : []);
+        if (maintErp && maintErp.totalCount !== undefined && maintErp.totalCount !== null) {
+          paginationState.erp.totalCount = maintErp.totalCount;
+        } else {
+          paginationState.erp.totalCount = rawErpMessages.length;
+        }
       } catch (mErr) {
         logConsole("Maintenance ERP Zprávy selhaly", mErr.message);
         rawErpMessages = [];
+        paginationState.erp.totalCount = 0;
       }
+      updatePageLabel('erp');
       updateTypeFilterOptions('filterTypeErp', rawErpMessages);
       applyFiltersErp();
       scanStatementDateMismatches(rawErpMessages);
@@ -4034,7 +4152,7 @@
       }
     }
 
-    function clearAllFilters() {
+    async function clearAllFilters() {
       // 1. Clear text search inputs
       const searchErp = document.getElementById('searchErp');
       const searchStmt = document.getElementById('searchStmt');
@@ -4088,12 +4206,22 @@
         r.classList.remove('ring-2', 'ring-amber-400', 'bg-amber-500/20');
       });
 
-      // 5. Apply filters across all grids
-      applyFiltersErp();
-      applyFiltersStatements();
-      applyFiltersBankMsgs();
+      // 5. Reset pagination pages
+      paginationState.erp.page = 1;
+      paginationState.stmt.page = 1;
+      paginationState.bank.page = 1;
+      updatePageLabel('erp');
+      updatePageLabel('stmt');
+      updatePageLabel('bank');
+
+      // 6. Fetch from server across all sections with cleared parameters
+      await Promise.all([
+        fetchErpData(),
+        fetchStatementsData(),
+        fetchBankData(),
+        fetchTelemetryData(false)
+      ]);
       renderPaymentsGrid(rawPayments);
-      applyFiltersTelemetry();
 
       showToast("Všechny textové i stavové filtry byly vymazány.", "success", 2500);
     }
@@ -4153,62 +4281,33 @@
     }
 
     function applyFiltersStatements() {
-      const stateFilter = document.getElementById('filterStateStmt').value;
       const countFilter = document.getElementById('filterCountStmt') ? document.getElementById('filterCountStmt').value : 'ALL';
-      const search = document.getElementById('searchStmt').value.toLowerCase();
+      let filtered = rawStatements || [];
 
-      const filtered = rawStatements.filter(item => {
-        const matchesState = checkStateMatch(item, stateFilter);
-
-        let matchesCount = true;
-        const count = item.numberOfStatements !== undefined && item.numberOfStatements !== null ? Number(item.numberOfStatements) : 0;
-        if (countFilter === 'HAS_STATEMENTS') {
-          matchesCount = count > 0;
-        } else if (countFilter === 'NO_STATEMENTS') {
-          matchesCount = count === 0;
-        }
-
-        const matchesSearch = !search || JSON.stringify(item).toLowerCase().includes(search);
-        const matchesDate = isItemInDateRange(item);
-        return matchesState && matchesCount && matchesSearch && matchesDate;
-      });
+      if (countFilter === 'HAS_STATEMENTS') {
+        filtered = filtered.filter(item => {
+          const count = item.numberOfStatements !== undefined && item.numberOfStatements !== null ? Number(item.numberOfStatements) : 0;
+          return count > 0;
+        });
+      } else if (countFilter === 'NO_STATEMENTS') {
+        filtered = filtered.filter(item => {
+          const count = item.numberOfStatements !== undefined && item.numberOfStatements !== null ? Number(item.numberOfStatements) : 0;
+          return count === 0;
+        });
+      }
 
       currentFilteredStatements = filtered;
       renderStatementsGrid(filtered);
     }
 
     function applyFiltersBankMsgs() {
-      const typeFilter = document.getElementById('filterTypeBank') ? document.getElementById('filterTypeBank').value : 'ALL';
-      const stateFilter = document.getElementById('filterStateBank').value;
-      const search = document.getElementById('searchBank').value.toLowerCase();
-
-      const filtered = rawBankMessages.filter(item => {
-        const matchesType = matchesMessageType(item, typeFilter);
-        const matchesState = checkStateMatch(item, stateFilter);
-        const matchesSearch = !search || JSON.stringify(item).toLowerCase().includes(search);
-        const matchesDate = isItemInDateRange(item);
-        return matchesType && matchesState && matchesSearch && matchesDate;
-      });
-
-      currentFilteredBank = filtered;
-      renderBankMessagesGrid(filtered);
+      currentFilteredBank = rawBankMessages || [];
+      renderBankMessagesGrid(currentFilteredBank);
     }
 
     function applyFiltersErp() {
-      const typeFilter = document.getElementById('filterTypeErp') ? document.getElementById('filterTypeErp').value : 'ALL';
-      const stateFilter = document.getElementById('filterStateErp').value;
-      const search = document.getElementById('searchErp').value.toLowerCase();
-
-      const filtered = rawErpMessages.filter(item => {
-        const matchesType = matchesMessageType(item, typeFilter);
-        const matchesState = checkStateMatch(item, stateFilter);
-        const matchesSearch = !search || JSON.stringify(item).toLowerCase().includes(search);
-        const matchesDate = isItemInDateRange(item);
-        return matchesType && matchesState && matchesSearch && matchesDate;
-      });
-
-      currentFilteredErp = filtered;
-      renderErpGrid(filtered);
+      currentFilteredErp = rawErpMessages || [];
+      renderErpGrid(currentFilteredErp);
     }
 
     async function fetchReqDataFromDS(reqId, customTitle = null) {
@@ -4393,11 +4492,11 @@
       }
     }
 
-    function linkToRef(refId) {
+    async function linkToRef(refId) {
       if (!refId) return;
       const cleanRef = String(refId).trim();
 
-      // Check where refId exists
+      // Check where refId exists in current memory
       const inStmt = rawStatements.some(s => s.requestReferenceId === cleanRef || s.code === cleanRef);
       const inBank = rawBankMessages.some(b => b.requestReferenceId === cleanRef || b.code === cleanRef);
       const inErp = rawErpMessages.some(e => e.requestReferenceId === cleanRef || e.code === cleanRef);
@@ -4414,13 +4513,19 @@
         if (fStateErp && fStateErp.value !== 'ALL') fStateErp.value = 'ALL';
         const inp = document.getElementById('searchErp');
         if (inp) inp.value = cleanRef;
-        onSearchInput('searchErp', 'clearErp', applyFiltersErp);
+        const clr = document.getElementById('clearErp');
+        if (clr) clr.classList.remove('hidden');
+        paginationState.erp.page = 1;
+        updatePageLabel('erp');
+        await fetchErpData();
         setTimeout(() => highlightMatchedRows(cleanRef), 150);
       } else {
         // Switch to Statements tab
         switchTab('tab-statements');
         ensureSectionOpen('secBodyStatements');
         ensureSectionOpen('secBodyBank');
+        const fStateStmt = document.getElementById('filterStateStmt');
+        if (fStateStmt && fStateStmt.value !== 'ALL') fStateStmt.value = 'ALL';
         const fTypeBank = document.getElementById('filterTypeBank');
         if (fTypeBank && fTypeBank.value !== 'ALL') fTypeBank.value = 'ALL';
         const fStateBank = document.getElementById('filterStateBank');
@@ -4429,8 +4534,15 @@
         const inpBank = document.getElementById('searchBank');
         if (inpStmt) inpStmt.value = cleanRef;
         if (inpBank) inpBank.value = cleanRef;
-        onSearchInput('searchStmt', 'clearStmt', applyFiltersStatements);
-        onSearchInput('searchBank', 'clearBank', applyFiltersBankMsgs);
+        const clrStmt = document.getElementById('clearStmt');
+        if (clrStmt) clrStmt.classList.remove('hidden');
+        const clrBank = document.getElementById('clearBank');
+        if (clrBank) clrBank.classList.remove('hidden');
+        paginationState.stmt.page = 1;
+        paginationState.bank.page = 1;
+        updatePageLabel('stmt');
+        updatePageLabel('bank');
+        await Promise.all([fetchStatementsData(), fetchBankData()]);
         setTimeout(() => highlightMatchedRows(cleanRef), 150);
       }
     }
@@ -4465,7 +4577,11 @@
     function renderStatementsGrid(items) {
       const tbody = document.getElementById('gridStatementsBody');
       const cntEl = document.getElementById('cntStatements');
-      if (cntEl) cntEl.textContent = items ? items.length : 0;
+      const countFilter = document.getElementById('filterCountStmt') ? document.getElementById('filterCountStmt').value : 'ALL';
+      const totalStmt = (countFilter === 'ALL' && paginationState.stmt && paginationState.stmt.totalCount !== undefined && paginationState.stmt.totalCount !== null)
+        ? paginationState.stmt.totalCount
+        : (items ? items.length : 0);
+      if (cntEl) cntEl.textContent = totalStmt;
 
       if (!items || items.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-gray-500">Žádné zprávy o výpisech pro zvolený filtr a Tenant ID.</td></tr>`;
@@ -4515,7 +4631,10 @@
     function renderBankMessagesGrid(items) {
       const tbody = document.getElementById('gridBankMessagesBody');
       const cntEl = document.getElementById('cntBank');
-      if (cntEl) cntEl.textContent = items ? items.length : 0;
+      const totalBank = (paginationState.bank && paginationState.bank.totalCount !== undefined && paginationState.bank.totalCount !== null)
+        ? paginationState.bank.totalCount
+        : (items ? items.length : 0);
+      if (cntEl) cntEl.textContent = totalBank;
 
       if (!items || items.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-gray-500">Žádné bankovní zprávy pro zvolený filtr.</td></tr>`;
@@ -4585,7 +4704,10 @@
     function renderErpGrid(items) {
       const tbody = document.getElementById('gridErpBody');
       const cntEl = document.getElementById('cntErp');
-      if (cntEl) cntEl.textContent = items ? items.length : 0;
+      const totalErp = (paginationState.erp && paginationState.erp.totalCount !== undefined && paginationState.erp.totalCount !== null)
+        ? paginationState.erp.totalCount
+        : (items ? items.length : 0);
+      if (cntEl) cntEl.textContent = totalErp;
 
       if (!items || items.length === 0) {
         tbody.innerHTML = `<tr><td colspan="10" class="p-6 text-center text-gray-500">Žádné ERP zprávy pro zvolený filtr a Tenant ID.</td></tr>`;
