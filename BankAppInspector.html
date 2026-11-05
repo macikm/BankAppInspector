@@ -4756,6 +4756,20 @@
       `;
     }
 
+    function renderTelemetryTenantCell(tenantId) {
+      if (!tenantId) return '<span class="text-gray-600">-</span>';
+      const short = tenantId.split('-')[0] || tenantId;
+      return `
+        <button onclick="copyToClipboard('${escapeHtml(tenantId)}', 'Tenant ID zkopírováno: ${escapeHtml(tenantId)}')"
+          title="Kopírovat kompletní Tenant ID:\n${escapeHtml(tenantId)}"
+          class="px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 border border-gray-700 text-teal-300 hover:text-teal-100 text-xs flex items-center gap-1.5 transition group">
+          <i class="fa-solid fa-building text-[10px] text-teal-400 group-hover:text-teal-300"></i>
+          <span class="truncate max-w-[110px]">${escapeHtml(short)}</span>
+          <i class="fa-regular fa-copy text-[10px] opacity-60 group-hover:opacity-100"></i>
+        </button>
+      `;
+    }
+
     async function fetchTelemetryData(showToastNotice = false) {
       if (!isAuthenticated()) {
         const tbody = document.getElementById('gridTelemetryBody');
@@ -4929,12 +4943,8 @@
           <td class="p-3 text-xs text-teal-400 truncate max-w-[200px]" title="${escapeHtml(path)}">
             ${escapeHtml(path)}
           </td>
-          <td class="p-3 whitespace-nowrap text-xs">
-            ${tenantId ? `
-              <span class="px-2 py-0.5 rounded bg-gray-900 border border-gray-700 text-gray-300 truncate max-w-[120px] inline-block align-middle" title="${escapeHtml(tenantId)}">
-                ${escapeHtml(tenantId.split('-')[0] || tenantId)}
-              </span>
-            ` : `<span class="text-gray-600">-</span>`}
+          <td class="p-3 whitespace-nowrap">
+            ${renderTelemetryTenantCell(tenantId)}
           </td>
           <td class="p-3 whitespace-nowrap text-xs text-gray-400">
             <span class="px-2 py-0.5 rounded bg-gray-900/60 border border-gray-800">${escapeHtml(host)}</span>
