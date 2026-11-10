@@ -6,19 +6,37 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Kontroluji aktualizace z Git repozitáře..."
+# 1. Kontrola souboru .env
+if [ ! -f .env ]; then
+    if [ -f .env.example ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ℹ️ Soubor .env neexistoval, vytvářím z .env.example..."
+        cp .env.example .env
+    fi
+fi
 
-# Stáhnout informace o změnách na origin/main
-git fetch origin main
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔍 Kontroluji aktualizace z Git repozitáře..."
+
+# Ověřit, zda je nastaven remote origin
+if ! git remote get-url origin > /dev/null 2>&1; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ Git remote 'origin' není nastaven."
+    exit 1
+fi
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" = "HEAD" ] || [ -z "$BRANCH" ]; then
+    BRANCH="main"
+fi
+
+git fetch origin "$BRANCH"
 
 LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse origin/main)
+REMOTE=$(git rev-parse "origin/$BRANCH")
 
 if [ "$LOCAL" = "$REMOTE" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ Repozitář je aktuální. Žádné nové změny."
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ Repozitář je aktuální ($BRANCH). Žádné nové změny."
 else
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔄 Zjištěna nová verze na Gitu. Aktualizuji..."
-    git pull origin main
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔄 Zjištěna nová verze na Gitu ($BRANCH). Aktualizuji..."
+    git pull origin "$BRANCH"
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🛠️ Rebuilduji a restartuji Docker kontejner..."
     if command -v docker-compose &> /dev/null; then

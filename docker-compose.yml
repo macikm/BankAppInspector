@@ -1,16 +1,22 @@
 services:
   bankapp-inspector:
     build: .
-    image: bankapp-inspector:latest
-    container_name: bankapp-inspector
+    image: ${IMAGE_NAME:-bankapp-inspector:latest}
+    container_name: ${CONTAINER_NAME:-bankapp-inspector}
     restart: unless-stopped
     environment:
-      - TZ=Europe/Prague
-    networks:
-      - infrastructure_default
+      - TZ=${TZ:-Europe/Prague}
+    env_file:
+      - path: .env
+        required: false
     ports:
-      - "8087:80"
-
-networks:
-  infrastructure_default:
-    external: true
+      - "${HOST_PORT:-8087}:${PORT:-80}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    labels:
+      - "app=${CONTAINER_NAME:-bankapp-inspector}"
+      - "maintainer=macikm"

@@ -19,4 +19,15 @@
 
 ## 💻 Spuštění
 
+### 1. V Docker kontejneru (doporučeno pro server)
+```bash
+# 1. Příprava .env souboru
+cp .env.example .env
+
+# 2. Sestavení a spuštění
+docker compose up -d --build
+```
+Aplikace bude dostupná na portu `8087` (lze změnit v `.env` parametrem `HOST_PORT`).
+
+### 2. Lokálně bez Dockeru
 Otevřete soubor `BankAppInspector.html` v jakémkoliv moderním prohlížeči.
