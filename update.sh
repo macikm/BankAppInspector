@@ -36,7 +36,8 @@ if [ "$LOCAL" = "$REMOTE" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ Repozitář je aktuální ($BRANCH). Žádné nové změny."
 else
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔄 Zjištěna nová verze na Gitu ($BRANCH). Aktualizuji..."
-    git pull origin "$BRANCH"
+    # Reset na vzdálenou větev zaručí hladkou aktualizaci bez konfliktů oprávnění (chmod) či konců řádků
+    git reset --hard "origin/$BRANCH"
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🛠️ Rebuilduji a restartuji Docker kontejner..."
     if command -v docker-compose &> /dev/null; then
