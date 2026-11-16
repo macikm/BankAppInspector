@@ -1314,7 +1314,7 @@
         <h3 class="text-lg font-bold text-white flex items-center gap-2">
           <i class="fa-solid fa-key text-teal-400"></i> Autentikace & Nastavení
         </h3>
-        <button onclick="toggleConfigModal()" class="text-gray-400 hover:text-white"><i
+        <button onclick="closeConfigModal()" class="text-gray-400 hover:text-white" title="Zavřít"><i
             class="fa-solid fa-xmark text-lg"></i></button>
       </div>
 
@@ -1361,14 +1361,14 @@
           class="hidden p-3 bg-red-950/80 border border-red-800 text-red-300 rounded-lg text-xs font-mono"></div>
 
         <div class="flex items-center justify-between pt-2">
-          <button type="button" id="modalBtnLogout" onclick="handleLogout(); toggleConfigModal();"
+          <button type="button" id="modalBtnLogout" onclick="handleLogout(); closeConfigModal();"
             class="hidden px-3.5 py-2 bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/80 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
             <i class="fa-solid fa-right-from-bracket text-red-400"></i> Odhlásit
           </button>
           <div class="flex items-center space-x-3 ml-auto">
-            <button type="button" onclick="toggleConfigModal()"
+            <button type="button" onclick="closeConfigModal()"
               class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg">Zavřít</button>
-            <button type="submit"
+            <button type="submit" id="btnSubmitAuth"
               class="px-5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold rounded-lg shadow-lg shadow-teal-600/30 flex items-center gap-2">
               <i class="fa-solid fa-plug"></i> Přihlásit & Načíst
             </button>
@@ -1770,7 +1770,7 @@
       updatePageLabel('stmt');
       updatePageLabel('bank');
 
-      await Promise.all([
+      await Promise.allSettled([
         fetchErpData(),
         fetchStatementsData(),
         fetchBankData(),
@@ -2842,7 +2842,7 @@
             }
           }
         } else if (expInfo.expired) {
-          handleSessionExpired();
+          handleSessionExpired("Platnost vašeho přihlášení vypršela. Prosím přihlaste se znovu.");
           return;
         }
 
@@ -2870,7 +2870,13 @@
       showToast("Byli jste úspěšně odhlášeni.", "success", 3000);
     }
 
-    function handleSessionExpired() {
+    let isSessionExpiring = false;
+
+    function handleSessionExpired(reason = "Vaše přihlášení vypršelo nebo bylo odmítnuto. Prosím přihlaste se znovu.") {
+      if (isSessionExpiring) return;
+      isSessionExpiring = true;
+      setTimeout(() => { isSessionExpiring = false; }, 4000);
+
       config.accessToken = '';
       localStorage.removeItem('bankapp_access_token');
       rawErpMessages = [];
@@ -2886,8 +2892,14 @@
       updateStatusUI(false, "Relace vypršela");
       renderEmptyLockedStateAll();
       updateTenantTriggerLabel();
-      showToast("Vaše přihlášení vypršelo. Prosím přihlaste se znovu.", "error", 5000);
-      toggleConfigModal();
+      showToast(reason, "error", 5000);
+
+      const modalErr = document.getElementById('modalError');
+      if (modalErr) {
+        modalErr.textContent = reason;
+        modalErr.classList.remove('hidden');
+      }
+      openConfigModal();
     }
 
     function renderEmptyLockedStateAll() {
@@ -2900,7 +2912,7 @@
               </div>
               <div class="text-base font-bold text-gray-100">Vyžaduje přihlášení</div>
               <div class="text-xs text-gray-400 max-w-md">Pro načtení a zobrazení dat (${title}) se prosím nejprve přihlaste platným uživatelským účtem nebo Bearer tokenem.</div>
-              <button onclick="toggleConfigModal()" class="mt-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold rounded-xl text-xs shadow-lg shadow-teal-600/30 flex items-center gap-2 transition">
+              <button onclick="openConfigModal()" class="mt-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold rounded-xl text-xs shadow-lg shadow-teal-600/30 flex items-center gap-2 transition">
                 <i class="fa-solid fa-key"></i> Otevřít přihlášení
               </button>
             </div>
@@ -2932,51 +2944,65 @@
       if (cntTelemetry) cntTelemetry.textContent = '0';
     }
 
+    let tokenRefreshPromise = null;
+
     async function obtainOAuthToken(silent = false) {
-      if (!config.username || !config.password) {
-        throw new Error("Chybí přihlašovací jméno nebo heslo.");
+      if (tokenRefreshPromise) {
+        return await tokenRefreshPromise;
       }
 
-      if (!silent) {
-        logConsole("Získávám OAuth token z IdentityServeru...");
-      }
+      tokenRefreshPromise = (async () => {
+        try {
+          if (!config.username || !config.password) {
+            throw new Error("Chybí přihlašovací jméno nebo heslo.");
+          }
 
-      const idpUrl = config.baseUrl.includes('localhost')
-        ? 'https://dev.avaplace.com/api/asol/idp/connect/token'
-        : `${config.baseUrl}/api/asol/idp/connect/token`;
+          if (!silent) {
+            logConsole("Získávám OAuth token z IdentityServeru...");
+          }
 
-      const bodyParams = new URLSearchParams();
-      bodyParams.append('grant_type', 'password');
-      bodyParams.append('username', config.username);
-      bodyParams.append('password', config.password);
-      bodyParams.append('client_id', config.clientId || 'plaza-pass');
-      if (config.clientSecret) {
-        bodyParams.append('client_secret', config.clientSecret);
-      }
+          const idpUrl = config.baseUrl.includes('localhost')
+            ? 'https://dev.avaplace.com/api/asol/idp/connect/token'
+            : `${config.baseUrl}/api/asol/idp/connect/token`;
 
-      const headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      };
-      if (config.tenantId) {
-        headers['X-Tenant'] = config.tenantId;
-      }
+          const bodyParams = new URLSearchParams();
+          bodyParams.append('grant_type', 'password');
+          bodyParams.append('username', config.username);
+          bodyParams.append('password', config.password);
+          bodyParams.append('client_id', config.clientId || 'plaza-pass');
+          if (config.clientSecret) {
+            bodyParams.append('client_secret', config.clientSecret);
+          }
 
-      const tokenRes = await fetch(idpUrl, {
-        method: 'POST',
-        headers: headers,
-        body: bodyParams
-      });
+          const headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          };
+          if (config.tenantId) {
+            headers['X-Tenant'] = config.tenantId;
+          }
 
-      if (!tokenRes.ok) {
-        const errText = await tokenRes.text();
-        throw new Error(`IDP Auth Failed (${tokenRes.status}): ${errText}`);
-      }
+          const tokenRes = await fetch(idpUrl, {
+            method: 'POST',
+            headers: headers,
+            body: bodyParams
+          });
 
-      const tokenData = await tokenRes.json();
-      config.accessToken = tokenData.access_token;
-      localStorage.setItem('bankapp_access_token', config.accessToken);
-      updateStatusUI(true, getAuthStatusText());
-      return config.accessToken;
+          if (!tokenRes.ok) {
+            const errText = await tokenRes.text();
+            throw new Error(`IDP Auth Failed (${tokenRes.status}): ${errText}`);
+          }
+
+          const tokenData = await tokenRes.json();
+          config.accessToken = tokenData.access_token;
+          localStorage.setItem('bankapp_access_token', config.accessToken);
+          updateStatusUI(true, getAuthStatusText());
+          return config.accessToken;
+        } finally {
+          tokenRefreshPromise = null;
+        }
+      })();
+
+      return await tokenRefreshPromise;
     }
 
     async function ensureValidToken() {
@@ -3118,8 +3144,19 @@
         knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
       }
 
+      validateAndAlignTenant();
       updateTenantTriggerLabel();
       renderTenantOptions();
+    }
+
+    function validateAndAlignTenant() {
+      if (!config.tenantId || isTenantHidden(config.tenantId) || (knownTenantsMap.size > 0 && !knownTenantsMap.has(config.tenantId))) {
+        const accessible = Array.from(knownTenantsMap.values()).find(t => t && t.id && !isTenantHidden(t.id));
+        if (accessible) {
+          config.tenantId = accessible.id;
+          localStorage.setItem('bankapp_tenant_id', config.tenantId);
+        }
+      }
     }
 
     function updateTenantTriggerLabel() {
@@ -3220,7 +3257,7 @@
       if (e) e.stopPropagation();
       if (!isAuthenticated()) {
         showToast("Pro výběr tenanta se nejprve přihlaste.", "error", 3000);
-        toggleConfigModal();
+        openConfigModal();
         return;
       }
       const panel = document.getElementById('tenantDropdownPanel');
@@ -3391,7 +3428,7 @@
         updateStatusUI(false, "Nepřihlášeno");
         renderEmptyLockedStateAll();
         // Automatically show config/login modal if not authenticated
-        toggleConfigModal();
+        openConfigModal();
       }
     });
 
@@ -3487,13 +3524,30 @@
       el.textContent = formatted + '\n\n' + el.textContent;
     }
 
-    function toggleConfigModal() {
+    function openConfigModal() {
       const modal = document.getElementById('configModal');
+      if (!modal) return;
       const uInp = document.getElementById('inputUsername');
       if (uInp && !uInp.value && config.username) {
         uInp.value = config.username;
       }
-      modal.classList.toggle('hidden');
+      modal.classList.remove('hidden');
+    }
+
+    function closeConfigModal() {
+      const modal = document.getElementById('configModal');
+      if (!modal) return;
+      modal.classList.add('hidden');
+    }
+
+    function toggleConfigModal() {
+      const modal = document.getElementById('configModal');
+      if (!modal) return;
+      if (modal.classList.contains('hidden')) {
+        openConfigModal();
+      } else {
+        closeConfigModal();
+      }
     }
 
     function closeDetailModal() {
@@ -3840,7 +3894,18 @@
 
     async function handleConnect(e) {
       e.preventDefault();
-      document.getElementById('modalError').classList.add('hidden');
+      const modalErr = document.getElementById('modalError');
+      if (modalErr) {
+        modalErr.textContent = '';
+        modalErr.classList.add('hidden');
+      }
+
+      const submitBtn = document.getElementById('btnSubmitAuth');
+      const origBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Přihlašuji...';
+      }
 
       config.baseUrl = document.getElementById('inputEnv').value;
       config.clientId = 'plaza-pass';
@@ -3855,28 +3920,35 @@
 
       document.getElementById('lblEnv').textContent = config.baseUrl;
 
-      // If user directly entered token
-      if (config.accessToken) {
-        localStorage.setItem('bankapp_access_token', config.accessToken);
-        updateStatusUI(true, "Použit ruční Token");
-        toggleConfigModal();
-        await fetchAndPopulateTenants();
-        await refreshData();
-        return;
-      }
-
-      // Obtain OAuth Token from IDP
       try {
+        // If user directly entered token
+        if (config.accessToken) {
+          localStorage.setItem('bankapp_access_token', config.accessToken);
+          updateStatusUI(true, "Použit ruční Token");
+          closeConfigModal();
+          await fetchAndPopulateTenants();
+          await refreshData();
+          return;
+        }
+
+        // Obtain OAuth Token from IDP
         await obtainOAuthToken(false);
-        toggleConfigModal();
+        closeConfigModal();
         await fetchAndPopulateTenants();
         await refreshData();
       } catch (err) {
         logConsole("Chyba při autentikaci", err.message);
-        const modalErr = document.getElementById('modalError');
-        modalErr.textContent = err.message;
-        modalErr.classList.remove('hidden');
+        if (modalErr) {
+          modalErr.textContent = err.message;
+          modalErr.classList.remove('hidden');
+        }
         updateStatusUI(false, "Chyba přihlášení");
+        openConfigModal();
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origBtnHtml;
+        }
       }
     }
 
@@ -3889,7 +3961,9 @@
           if (!silent) {
             logConsole(`Chyba autentikace před voláním ${endpoint}:`, e.message);
           }
-          handleSessionExpired();
+          if (!endpoint.includes('/api/asol/tm/')) {
+            handleSessionExpired("Chyba ověření tokenu: " + e.message);
+          }
           throw e;
         }
       }
@@ -3925,15 +3999,16 @@
 
       const res = await fetch(url, options);
 
-      // Automatic token refresh retry on 401 Unauthorized or 403 Forbidden
-      if ((res.status === 401 || res.status === 403) && !isRetry && config.username && config.password) {
+      // Automatic token refresh retry on 401 Unauthorized ONLY (never 403 Forbidden)
+      if (res.status === 401 && !isRetry && config.username && config.password) {
         try {
-          config.accessToken = null;
-          localStorage.removeItem('bankapp_access_token');
           await obtainOAuthToken(true);
           return await fetchApi(endpoint, method, body, silent, true);
         } catch (refreshErr) {
-          handleSessionExpired();
+          if (!endpoint.includes('/api/asol/tm/')) {
+            handleSessionExpired("Obnova přihlášení selhala. Prosím přihlaste se znovu.");
+          }
+          throw refreshErr;
         }
       }
 
@@ -3942,8 +4017,8 @@
         if (!silent) {
           logConsole(`Chyba API (${res.status}) z ${endpoint}:`, errText);
         }
-        if (res.status === 401) {
-          handleSessionExpired();
+        if (res.status === 401 && !endpoint.includes('/api/asol/tm/')) {
+          handleSessionExpired("Platnost vašeho přihlášení vypršela (HTTP 401). Prosím přihlaste se znovu.");
         }
         throw new Error(`HTTP ${res.status}: ${errText}`);
       }
@@ -4071,38 +4146,47 @@
       if (tbodyTelemetry) tbodyTelemetry.innerHTML = loadingHtml(9, 'Telemetrie');
     }
 
+    let isRefreshingData = false;
+
     async function refreshData() {
-      if (!isAuthenticated()) {
-        renderEmptyLockedStateAll();
-        updateStatusUI(false, "Nepřihlášeno");
-        showToast("Pro načtení dat se prosím nejprve přihlaste.", "error", 3000);
-        toggleConfigModal();
-        return;
-      }
-      if (!config.tenantId) return;
-
-      const icon = document.getElementById('refreshIcon');
-      if (icon) icon.classList.add('fa-spin');
-
-      showToast(`Načítám data tenanta (${config.tenantId})...`, 'loading', 0);
-      setTableLoadingStates();
+      if (isRefreshingData) return;
+      isRefreshingData = true;
 
       try {
-        await Promise.all([
-          fetchErpData(),
-          fetchStatementsData(),
-          fetchBankData(),
-          fetchPaymentsData(),
-          fetchTelemetryData(false)
-        ]);
+        if (!isAuthenticated()) {
+          renderEmptyLockedStateAll();
+          updateStatusUI(false, "Nepřihlášeno");
+          showToast("Pro načtení dat se prosím nejprve přihlaste.", "error", 3000);
+          openConfigModal();
+          return;
+        }
+        if (!config.tenantId) return;
 
-        const timeStr = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        showToast(`Data načtena pro tenant ${config.tenantId} (${timeStr})`, 'success', 3000);
-      } catch (err) {
-        logConsole("Chyba při obnově dat tenanta:", err.message);
-        showToast(`Chyba načítání dat pro ${config.tenantId}`, 'error', 4000);
+        const icon = document.getElementById('refreshIcon');
+        if (icon) icon.classList.add('fa-spin');
+
+        showToast(`Načítám data tenanta (${config.tenantId})...`, 'loading', 0);
+        setTableLoadingStates();
+
+        try {
+          await Promise.allSettled([
+            fetchErpData(),
+            fetchStatementsData(),
+            fetchBankData(),
+            fetchPaymentsData(),
+            fetchTelemetryData(false)
+          ]);
+
+          const timeStr = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          showToast(`Data načtena pro tenant ${config.tenantId} (${timeStr})`, 'success', 3000);
+        } catch (err) {
+          logConsole("Chyba při obnově dat tenanta:", err.message);
+          showToast(`Chyba načítání dat pro ${config.tenantId}`, 'error', 4000);
+        } finally {
+          if (icon) icon.classList.remove('fa-spin');
+        }
       } finally {
-        if (icon) icon.classList.remove('fa-spin');
+        isRefreshingData = false;
       }
     }
 
@@ -4945,6 +5029,8 @@
       `;
     }
 
+    let lastTelemetryError = null;
+
     async function fetchTelemetryData(showToastNotice = false) {
       if (!isAuthenticated()) {
         const tbody = document.getElementById('gridTelemetryBody');
@@ -5021,6 +5107,7 @@
       const endpoint = `/api/asol/tm/api/v2/Logs${queryParams}`;
 
       try {
+        lastTelemetryError = null;
         const res = await fetchApi(endpoint, 'GET');
         if (res && res.value && Array.isArray(res.value)) {
           rawTelemetryLogs = res.value;
@@ -5033,6 +5120,7 @@
           showToast(`Telemetrie načtena (${rawTelemetryLogs.length} záznamů)`, 'success', 2500);
         }
       } catch (err) {
+        lastTelemetryError = err.message;
         logConsole('Načítání telemetrie selhalo', err.message);
         rawTelemetryLogs = [];
         if (showToastNotice) {
@@ -5073,7 +5161,10 @@
       if (cntEl) cntEl.textContent = items ? items.length : 0;
 
       if (!items || items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-gray-500">Žádné telemetrické záznamy neodpovídají zadaným kritériím nebo filtru.</td></tr>`;
+        const msg = lastTelemetryError
+          ? `<i class="fa-solid fa-triangle-exclamation text-amber-400 mr-2"></i>Telemetrie není pro aktuální přihlášení nebo server dostupná (${escapeHtml(lastTelemetryError)}).`
+          : `Žádné telemetrické záznamy neodpovídají zadaným kritériím nebo filtru.`;
+        tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-gray-400">${msg}</td></tr>`;
         return;
       }
 
