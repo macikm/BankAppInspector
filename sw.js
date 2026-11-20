@@ -1,5 +1,5 @@
 // BankApp Inspector Service Worker
-const CACHE_NAME = 'bankapp-inspector-v3';
+const CACHE_NAME = 'bankapp-inspector-v4';
 const STATIC_ASSETS = [
   './BankAppInspector.html',
   './manifest.json',

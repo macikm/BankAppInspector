@@ -783,7 +783,14 @@
     <!-- Active Settings Bar -->
     <div class="glass-panel rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 text-xs">
       <div class="flex flex-wrap items-center gap-4">
-        <div><span class="text-gray-400">Prostředí:</span> <strong id="lblEnv" class="text-blue-500 font-mono">https://avaplace.com</strong></div>
+        <div class="flex items-center gap-2">
+          <span class="text-gray-400">Prostředí:</span>
+          <strong id="lblEnv" class="text-blue-500 font-mono">https://avaplace.com</strong>
+          <span id="badgeLegacyFilter" class="hidden px-2 py-0.5 rounded bg-amber-950/80 text-amber-400 border border-amber-700/70 text-[11px] font-medium cursor-help"
+            title="Na tomto prostředí zatím není nasazena verze API s parametry serverového filtrování (search/state/messageType). Při filtrování se automaticky použije záložní odbočka (načtení dávky až 1000 záznamů a dofiltrování).">
+            <i class="fa-solid fa-triangle-exclamation text-[10px] mr-1"></i>Starší API (záložní filtr)
+          </span>
+        </div>
 
         <!-- Global Date Range Filter (Období Od - Do) -->
         <div class="flex flex-wrap items-center gap-2 border-l border-gray-800/80 pl-4">
@@ -1597,8 +1604,68 @@
       await fetchTelemetryData(true);
     }
 
-    // Server-side filter helpers & debouncing
+    // Server-side filter helpers, capability detection & debouncing
+    let envServerFilterSupportCache = {};
+
+    function isServerFilteringSupported() {
+      const env = config.baseUrl;
+      // Primary mode is ALWAYS server-side filtering (true) unless explicitly detected as legacy API
+      return envServerFilterSupportCache[env] !== false;
+    }
+
+    function updateLegacyFilterBadge() {
+      const badge = document.getElementById('badgeLegacyFilter');
+      if (!badge) return;
+      if (!isServerFilteringSupported()) {
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    async function detectServerFilteringSupport() {
+      const env = config.baseUrl;
+      if (!env) return true;
+      if (envServerFilterSupportCache[env] !== undefined) {
+        updateLegacyFilterBadge();
+        return envServerFilterSupportCache[env];
+      }
+
+      const swaggerUrl = env.includes('localhost')
+        ? `${env}/swagger/v1/swagger.json`
+        : `${env}/api/asoleu/bankapp/swagger/v1/swagger.json`;
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(swaggerUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const spec = await res.json();
+          const paths = spec && spec.paths ? spec.paths : {};
+          const getMsgKey = Object.keys(paths).find(k => k.includes('GetMessages'));
+          const params = (getMsgKey && paths[getMsgKey]?.get?.parameters) ? paths[getMsgKey].get.parameters : [];
+          const hasSearchParam = params.some(p => p && p.name === 'search');
+
+          envServerFilterSupportCache[env] = hasSearchParam;
+          if (!hasSearchParam) {
+            logConsole(`Upozornění: Prostředí ${env} má starší verzi API bez serverového filtrování (ve Swaggeru chybí parametry search/state/messageType). Aktivována záložní odbočka filtrování.`);
+          }
+        } else {
+          envServerFilterSupportCache[env] = true;
+        }
+      } catch (e) {
+        // Default to primary server-side filtering if Swagger check cannot complete
+        envServerFilterSupportCache[env] = true;
+      }
+
+      updateLegacyFilterBadge();
+      return envServerFilterSupportCache[env];
+    }
+
     let searchDebounceTimers = {};
+
     function onSearchInputDebounced(section, inputId, clearBtnId, fetchFn) {
       const inp = document.getElementById(inputId);
       const clearBtn = document.getElementById(clearBtnId);
@@ -1667,16 +1734,6 @@
 
     function buildMaintenanceQueryParams(section) {
       const p = paginationState[section] || { page: 1, pageSize: 100 };
-      const offset = (p.page - 1) * p.pageSize;
-      const limit = p.pageSize;
-      let params = `?Offset=${offset}&Limit=${limit}&page=${p.page}&pageSize=${p.pageSize}`;
-
-      if (dateFilter.from) params += `&from=${encodeURIComponent(dateFilter.from)}`;
-      if (dateFilter.to) {
-        const toVal = dateFilter.to.includes('T') ? dateFilter.to : `${dateFilter.to}T23:59:59`;
-        params += `&to=${encodeURIComponent(toVal)}`;
-      }
-
       let stateVal = null;
       let typeVal = null;
       let searchVal = null;
@@ -1700,6 +1757,22 @@
         if (elState) stateVal = mapUiStateToServer(elState.value);
         if (elType) typeVal = mapUiMessageTypeToServer(elType.value);
         if (elSearch && elSearch.value.trim()) searchVal = elSearch.value.trim();
+      }
+
+      const hasActiveFilter = Boolean(stateVal || typeVal || searchVal);
+      // Exception branch for legacy environments (e.g. beta before deployment):
+      // when filtering on a server that ignores filter params, fetch up to 1000 items from offset 0 so records on later pages aren't missed
+      const useLegacyBatchFetch = !isServerFilteringSupported() && hasActiveFilter;
+      const offset = useLegacyBatchFetch ? 0 : (p.page - 1) * p.pageSize;
+      const limit = useLegacyBatchFetch ? Math.max(p.pageSize, 1000) : p.pageSize;
+      const pageNum = useLegacyBatchFetch ? 1 : p.page;
+
+      let params = `?Offset=${offset}&Limit=${limit}&page=${pageNum}&pageSize=${limit}`;
+
+      if (dateFilter.from) params += `&from=${encodeURIComponent(dateFilter.from)}`;
+      if (dateFilter.to) {
+        const toVal = dateFilter.to.includes('T') ? dateFilter.to : `${dateFilter.to}T23:59:59`;
+        params += `&to=${encodeURIComponent(toVal)}`;
       }
 
       if (stateVal) params += `&state=${encodeURIComponent(stateVal)}`;
@@ -4169,6 +4242,7 @@
         setTableLoadingStates();
 
         try {
+          await detectServerFilteringSupport();
           await Promise.allSettled([
             fetchErpData(),
             fetchStatementsData(),
@@ -4433,17 +4507,64 @@
         });
       }
 
+      // Exception branch ONLY for legacy servers that don't support server-side filtering (e.g. Beta before update)
+      if (!isServerFilteringSupported()) {
+        const stateFilter = document.getElementById('filterStateStmt') ? document.getElementById('filterStateStmt').value : 'ALL';
+        const search = (document.getElementById('searchStmt') ? document.getElementById('searchStmt').value : '').trim().toLowerCase();
+        if (stateFilter !== 'ALL' || search) {
+          filtered = filtered.filter(item => {
+            if (!checkStateMatch(item, stateFilter)) return false;
+            if (!search) return true;
+            return JSON.stringify(item).toLowerCase().includes(search);
+          });
+        }
+      }
+
       currentFilteredStatements = filtered;
       renderStatementsGrid(filtered);
     }
 
     function applyFiltersBankMsgs() {
-      currentFilteredBank = rawBankMessages || [];
+      let filtered = rawBankMessages || [];
+
+      // Exception branch ONLY for legacy servers that don't support server-side filtering
+      if (!isServerFilteringSupported()) {
+        const typeFilter = document.getElementById('filterTypeBank') ? document.getElementById('filterTypeBank').value : 'ALL';
+        const stateFilter = document.getElementById('filterStateBank') ? document.getElementById('filterStateBank').value : 'ALL';
+        const search = (document.getElementById('searchBank') ? document.getElementById('searchBank').value : '').trim().toLowerCase();
+        if (typeFilter !== 'ALL' || stateFilter !== 'ALL' || search) {
+          filtered = filtered.filter(item => {
+            if (!matchesMessageType(item, typeFilter)) return false;
+            if (!checkStateMatch(item, stateFilter)) return false;
+            if (!search) return true;
+            return JSON.stringify(item).toLowerCase().includes(search);
+          });
+        }
+      }
+
+      currentFilteredBank = filtered;
       renderBankMessagesGrid(currentFilteredBank);
     }
 
     function applyFiltersErp() {
-      currentFilteredErp = rawErpMessages || [];
+      let filtered = rawErpMessages || [];
+
+      // Exception branch ONLY for legacy servers that don't support server-side filtering
+      if (!isServerFilteringSupported()) {
+        const typeFilter = document.getElementById('filterTypeErp') ? document.getElementById('filterTypeErp').value : 'ALL';
+        const stateFilter = document.getElementById('filterStateErp') ? document.getElementById('filterStateErp').value : 'ALL';
+        const search = (document.getElementById('searchErp') ? document.getElementById('searchErp').value : '').trim().toLowerCase();
+        if (typeFilter !== 'ALL' || stateFilter !== 'ALL' || search) {
+          filtered = filtered.filter(item => {
+            if (!matchesMessageType(item, typeFilter)) return false;
+            if (!checkStateMatch(item, stateFilter)) return false;
+            if (!search) return true;
+            return JSON.stringify(item).toLowerCase().includes(search);
+          });
+        }
+      }
+
+      currentFilteredErp = filtered;
       renderErpGrid(currentFilteredErp);
     }
 
@@ -4714,8 +4835,8 @@
     function renderStatementsGrid(items) {
       const tbody = document.getElementById('gridStatementsBody');
       const cntEl = document.getElementById('cntStatements');
-      const countFilter = document.getElementById('filterCountStmt') ? document.getElementById('filterCountStmt').value : 'ALL';
-      const totalStmt = (countFilter === 'ALL' && paginationState.stmt && paginationState.stmt.totalCount !== undefined && paginationState.stmt.totalCount !== null)
+      const isClientFiltered = items && rawStatements && items.length < rawStatements.length;
+      const totalStmt = (!isClientFiltered && paginationState.stmt && paginationState.stmt.totalCount !== undefined && paginationState.stmt.totalCount !== null)
         ? paginationState.stmt.totalCount
         : (items ? items.length : 0);
       if (cntEl) cntEl.textContent = totalStmt;
@@ -4768,7 +4889,8 @@
     function renderBankMessagesGrid(items) {
       const tbody = document.getElementById('gridBankMessagesBody');
       const cntEl = document.getElementById('cntBank');
-      const totalBank = (paginationState.bank && paginationState.bank.totalCount !== undefined && paginationState.bank.totalCount !== null)
+      const isClientFiltered = items && rawBankMessages && items.length < rawBankMessages.length;
+      const totalBank = (!isClientFiltered && paginationState.bank && paginationState.bank.totalCount !== undefined && paginationState.bank.totalCount !== null)
         ? paginationState.bank.totalCount
         : (items ? items.length : 0);
       if (cntEl) cntEl.textContent = totalBank;
@@ -4841,7 +4963,8 @@
     function renderErpGrid(items) {
       const tbody = document.getElementById('gridErpBody');
       const cntEl = document.getElementById('cntErp');
-      const totalErp = (paginationState.erp && paginationState.erp.totalCount !== undefined && paginationState.erp.totalCount !== null)
+      const isClientFiltered = items && rawErpMessages && items.length < rawErpMessages.length;
+      const totalErp = (!isClientFiltered && paginationState.erp && paginationState.erp.totalCount !== undefined && paginationState.erp.totalCount !== null)
         ? paginationState.erp.totalCount
         : (items ? items.length : 0);
       if (cntEl) cntEl.textContent = totalErp;
