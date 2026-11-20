@@ -1451,10 +1451,12 @@
   </div>
 
   <script>
-    // State storage
+    // State storage (tenantId always starts empty until actively selected by user)
+    localStorage.removeItem('bankapp_tenant_id');
+    localStorage.removeItem('bankapp_cached_tenants');
     let config = {
-      baseUrl: 'https://avaplace.com',
-      tenantId: localStorage.getItem('bankapp_tenant_id') || 'ICEnergo-498e5a27-3e95-4ff3-88fd-357e0a9450aa',
+      baseUrl: localStorage.getItem('bankapp_base_url') || 'https://avaplace.com',
+      tenantId: '',
       clientId: 'plaza-pass',
       clientSecret: '',
       username: localStorage.getItem('bankapp_username') || '',
@@ -2926,7 +2928,10 @@
     function handleLogout() {
       config.accessToken = '';
       config.password = '';
+      config.tenantId = '';
+      knownTenantsMap.clear();
       localStorage.removeItem('bankapp_access_token');
+      localStorage.removeItem('bankapp_tenant_id');
       rawErpMessages = [];
       rawStatements = [];
       rawBankMessages = [];
@@ -2951,7 +2956,10 @@
       setTimeout(() => { isSessionExpiring = false; }, 4000);
 
       config.accessToken = '';
+      config.tenantId = '';
+      knownTenantsMap.clear();
       localStorage.removeItem('bankapp_access_token');
+      localStorage.removeItem('bankapp_tenant_id');
       rawErpMessages = [];
       rawStatements = [];
       rawBankMessages = [];
@@ -3004,6 +3012,48 @@
       if (tbodyBank) tbodyBank.innerHTML = lockedHtml(9, 'Bankovní Zprávy');
       if (tbodyPay) tbodyPay.innerHTML = lockedHtml(7, 'Dávkové Příkazy');
       if (tbodyTelemetry) tbodyTelemetry.innerHTML = lockedHtml(9, 'Telemetrie');
+
+      const cntErp = document.getElementById('cntErp');
+      const cntStmt = document.getElementById('cntStatements');
+      const cntBank = document.getElementById('cntBank');
+      const cntPay = document.getElementById('cntPayments');
+      const cntTelemetry = document.getElementById('cntTelemetry');
+      if (cntErp) cntErp.textContent = '0';
+      if (cntStmt) cntStmt.textContent = '0';
+      if (cntBank) cntBank.textContent = '0';
+      if (cntPay) cntPay.textContent = '0';
+      if (cntTelemetry) cntTelemetry.textContent = '0';
+    }
+
+    function renderNoTenantSelectedStateAll() {
+      const selectTenantHtml = (colSpan, title) => `
+        <tr>
+          <td colspan="${colSpan}" class="p-12 text-center text-gray-400 bg-gray-900/20">
+            <div class="flex flex-col items-center justify-center gap-3 py-6">
+              <div class="w-14 h-14 rounded-2xl bg-gray-900 border border-green-500/40 flex items-center justify-center text-green-400 text-2xl shadow-xl">
+                <i class="fa-solid fa-building-user"></i>
+              </div>
+              <div class="text-base font-bold text-gray-100">Není vybrán žádný tenant</div>
+              <div class="text-xs text-gray-400 max-w-md">Pro načtení a zobrazení dat (${title}) prosím nejprve vyberte tenanta ze seznamu v horní liště.</div>
+              <button type="button" onclick="toggleTenantDropdown(event)" class="mt-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold rounded-xl text-xs shadow-lg shadow-teal-600/30 flex items-center gap-2 transition">
+                <i class="fa-solid fa-building-user"></i> Vybrat tenanta ze seznamu
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+
+      const tbodyErp = document.getElementById('gridErpBody');
+      const tbodyStmt = document.getElementById('gridStatementsBody');
+      const tbodyBank = document.getElementById('gridBankMessagesBody');
+      const tbodyPay = document.getElementById('gridPaymentsBody');
+      const tbodyTelemetry = document.getElementById('gridTelemetryBody');
+
+      if (tbodyErp) tbodyErp.innerHTML = selectTenantHtml(10, 'ERP Požadavky');
+      if (tbodyStmt) tbodyStmt.innerHTML = selectTenantHtml(9, 'Výpisy');
+      if (tbodyBank) tbodyBank.innerHTML = selectTenantHtml(9, 'Bankovní Zprávy');
+      if (tbodyPay) tbodyPay.innerHTML = selectTenantHtml(7, 'Dávkové Příkazy');
+      if (tbodyTelemetry) tbodyTelemetry.innerHTML = selectTenantHtml(9, 'Telemetrie');
 
       const cntErp = document.getElementById('cntErp');
       const cntStmt = document.getElementById('cntStatements');
@@ -3093,24 +3143,8 @@
       return config.accessToken;
     }
 
-    // Known / default tenants map
-    let knownTenantsMap = new Map([
-      ['ICEnergo-498e5a27-3e95-4ff3-88fd-357e0a9450aa', { id: 'ICEnergo-498e5a27-3e95-4ff3-88fd-357e0a9450aa', name: 'IC Energo' }],
-      ['ASOLEU', { id: 'ASOLEU', name: 'Asseco Solutions' }]
-    ]);
-
-    // Load cached tenants from localStorage if available
-    try {
-      const cachedStr = localStorage.getItem('bankapp_cached_tenants');
-      if (cachedStr) {
-        const parsed = JSON.parse(cachedStr);
-        if (Array.isArray(parsed)) {
-          for (const t of parsed) {
-            if (t && t.id && !isTenantHidden(t.id)) knownTenantsMap.set(t.id, t);
-          }
-        }
-      }
-    } catch (e) {}
+    // Known tenants map (populated dynamically from current environment's IDP)
+    let knownTenantsMap = new Map();
 
     async function fetchUserTenantsFromIdp() {
       if (!config.accessToken) return [];
@@ -3184,37 +3218,24 @@
       if (isFetchingTenants) return;
       isFetchingTenants = true;
 
-      // Ensure ASOLEU is present in knownTenantsMap if user is authorized
-      if (isAsolEuAllowed()) {
-        if (!knownTenantsMap.has('ASOLEU')) knownTenantsMap.set('ASOLEU', { id: 'ASOLEU', name: 'Asseco Solutions' });
-      } else {
-        knownTenantsMap.delete('ASOLEU');
-      }
-
-      if (config.tenantId && !isTenantHidden(config.tenantId) && !knownTenantsMap.has(config.tenantId)) {
-        knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
-      }
-
       updateTenantTriggerLabel();
       renderTenantOptions();
 
       try {
         const idpTenants = await fetchUserTenantsFromIdp();
+        knownTenantsMap.clear();
+        if (isAsolEuAllowed()) {
+          knownTenantsMap.set('ASOLEU', { id: 'ASOLEU', name: 'Asseco Solutions' });
+        }
         if (idpTenants && idpTenants.length > 0) {
           for (const t of idpTenants) {
             if (t && t.id && !isTenantHidden(t.id)) knownTenantsMap.set(t.id, t);
           }
-          const toCache = Array.from(knownTenantsMap.values()).filter(t => t && t.id && !isTenantHidden(t.id));
-          localStorage.setItem('bankapp_cached_tenants', JSON.stringify(toCache));
         }
       } catch (e) {
         logConsole("Načtení tenantů selhalo", e.message);
       } finally {
         isFetchingTenants = false;
-      }
-
-      if (config.tenantId && !isTenantHidden(config.tenantId) && !knownTenantsMap.has(config.tenantId)) {
-        knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
       }
 
       validateAndAlignTenant();
@@ -3223,12 +3244,9 @@
     }
 
     function validateAndAlignTenant() {
+      // Do NOT auto-select any tenant if none is selected or if current tenant does not exist on this stage
       if (!config.tenantId || isTenantHidden(config.tenantId) || (knownTenantsMap.size > 0 && !knownTenantsMap.has(config.tenantId))) {
-        const accessible = Array.from(knownTenantsMap.values()).find(t => t && t.id && !isTenantHidden(t.id));
-        if (accessible) {
-          config.tenantId = accessible.id;
-          localStorage.setItem('bankapp_tenant_id', config.tenantId);
-        }
+        config.tenantId = '';
       }
     }
 
@@ -3236,13 +3254,23 @@
       const lbl = document.getElementById('tenantDropdownLabel');
       if (!lbl) return;
 
+      if (!config.tenantId) {
+        if (isFetchingTenants) {
+          lbl.textContent = 'Načítám seznam tenantů...';
+        } else {
+          const count = Array.from(knownTenantsMap.values()).filter(t => t && t.id && !isTenantHidden(t.id)).length;
+          lbl.textContent = count > 0 ? `-- Vyberte tenanta (${count}) --` : '-- Vyberte tenanta --';
+        }
+        return;
+      }
+
       const current = knownTenantsMap.get(config.tenantId);
       if (current) {
         lbl.textContent = (current.name && current.name !== current.id)
           ? `${current.name} (${current.id})`
           : current.id;
       } else {
-        lbl.textContent = config.tenantId || 'Vyberte Tenanta...';
+        lbl.textContent = config.tenantId;
       }
     }
 
@@ -3482,10 +3510,19 @@
         if (label) label.textContent = 'Světlý režim';
       }
 
-      if (isTenantHidden(config.tenantId)) {
-        config.tenantId = 'ICEnergo-498e5a27-3e95-4ff3-88fd-357e0a9450aa';
-        localStorage.setItem('bankapp_tenant_id', config.tenantId);
+      // Sync saved baseUrl with environment selector and header label
+      const envSelect = document.getElementById('inputEnv');
+      if (envSelect && config.baseUrl) {
+        if ([...envSelect.options].some(o => o.value === config.baseUrl)) {
+          envSelect.value = config.baseUrl;
+        }
       }
+      const lblEnv = document.getElementById('lblEnv');
+      if (lblEnv) lblEnv.textContent = config.baseUrl;
+      updateEnvUrls();
+
+      // Always start without a pre-selected tenant so user actively chooses one for the current stage
+      config.tenantId = '';
 
       updateTenantTriggerLabel();
       startTokenMonitor();
@@ -3493,9 +3530,10 @@
       // Check if valid token exists on startup
       if (isAuthenticated()) {
         updateStatusUI(true, getAuthStatusText());
+        renderNoTenantSelectedStateAll();
         await Promise.allSettled([
           fetchAndPopulateTenants(),
-          refreshData()
+          detectServerFilteringSupport()
         ]);
       } else {
         updateStatusUI(false, "Nepřihlášeno");
@@ -3560,8 +3598,7 @@
       }
 
       config.tenantId = cleanVal;
-      localStorage.setItem('bankapp_tenant_id', config.tenantId);
-      logConsole(`Tenant ID upraven na: ${config.tenantId}`);
+      logConsole(`Tenant ID vybrán: ${config.tenantId}`);
 
       if (!knownTenantsMap.has(config.tenantId)) {
         knownTenantsMap.set(config.tenantId, { id: config.tenantId, name: config.tenantId });
@@ -3573,18 +3610,17 @@
       setTableLoadingStates();
 
       // Reset cached token and acquire fresh OAuth token bound to new Tenant ID BEFORE fetching data
-      config.accessToken = null;
-      localStorage.removeItem('bankapp_access_token');
-      try {
-        await ensureValidToken();
-      } catch (e) {
-        logConsole("Upozornění: Získání tokenu pro nový tenant selhalo", e.message);
+      if (config.username && config.password) {
+        config.accessToken = null;
+        localStorage.removeItem('bankapp_access_token');
+        try {
+          await ensureValidToken();
+        } catch (e) {
+          logConsole("Upozornění: Získání tokenu pro nový tenant selhalo", e.message);
+        }
       }
 
-      await Promise.allSettled([
-        fetchAndPopulateTenants(),
-        refreshData()
-      ]);
+      await refreshData();
     }
 
     function logConsole(msg, obj = null) {
@@ -3981,11 +4017,30 @@
       }
 
       config.baseUrl = document.getElementById('inputEnv').value;
+      localStorage.setItem('bankapp_base_url', config.baseUrl);
       config.clientId = 'plaza-pass';
       config.clientSecret = '';
       config.username = document.getElementById('inputUsername').value.trim();
       config.password = document.getElementById('inputPassword').value;
       config.accessToken = document.getElementById('inputToken').value.trim();
+
+      // Reset tenant selection & cached records when logging in or switching stage
+      config.tenantId = '';
+      knownTenantsMap.clear();
+      rawErpMessages = [];
+      rawStatements = [];
+      rawBankMessages = [];
+      rawPayments = [];
+      rawTelemetryLogs = [];
+      currentFilteredErp = [];
+      currentFilteredStatements = [];
+      currentFilteredBank = [];
+      currentFilteredPayments = [];
+      currentFilteredTelemetry = [];
+      statementMismatchCache = {};
+      statementReqCache = {};
+      paymentTxCache = {};
+      updateTenantTriggerLabel();
 
       if (config.username) {
         localStorage.setItem('bankapp_username', config.username);
@@ -3999,16 +4054,26 @@
           localStorage.setItem('bankapp_access_token', config.accessToken);
           updateStatusUI(true, "Použit ruční Token");
           closeConfigModal();
-          await fetchAndPopulateTenants();
-          await refreshData();
+          renderNoTenantSelectedStateAll();
+          await Promise.allSettled([
+            fetchAndPopulateTenants(),
+            detectServerFilteringSupport()
+          ]);
+          showToast("Přihlášeno. Vyberte prosím tenanta ze seznamu v horní liště.", "success", 3500);
+          toggleTenantDropdown();
           return;
         }
 
-        // Obtain OAuth Token from IDP
+        // Obtain OAuth Token from IDP (without X-Tenant so it's not bound to a stale stage tenant)
         await obtainOAuthToken(false);
         closeConfigModal();
-        await fetchAndPopulateTenants();
-        await refreshData();
+        renderNoTenantSelectedStateAll();
+        await Promise.allSettled([
+          fetchAndPopulateTenants(),
+          detectServerFilteringSupport()
+        ]);
+        showToast("Přihlášeno. Vyberte prosím tenanta ze seznamu v horní liště.", "success", 3500);
+        toggleTenantDropdown();
       } catch (err) {
         logConsole("Chyba při autentikaci", err.message);
         if (modalErr) {
@@ -4116,6 +4181,7 @@
     }
 
     async function fetchStatementsData() {
+      if (!config.tenantId) return;
       const queryParams = buildMaintenanceQueryParams('stmt');
 
       try {
@@ -4141,6 +4207,7 @@
     }
 
     async function fetchBankData() {
+      if (!config.tenantId) return;
       const queryParams = buildMaintenanceQueryParams('bank');
 
       try {
@@ -4171,6 +4238,7 @@
     }
 
     async function fetchErpData() {
+      if (!config.tenantId) return;
       const queryParams = buildMaintenanceQueryParams('erp');
 
       try {
@@ -4233,7 +4301,12 @@
           openConfigModal();
           return;
         }
-        if (!config.tenantId) return;
+        if (!config.tenantId) {
+          renderNoTenantSelectedStateAll();
+          showToast("Nejprve vyberte tenanta ze seznamu v horní liště.", "error", 3000);
+          toggleTenantDropdown();
+          return;
+        }
 
         const icon = document.getElementById('refreshIcon');
         if (icon) icon.classList.add('fa-spin');
